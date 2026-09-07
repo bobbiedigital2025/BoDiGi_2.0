@@ -45,13 +45,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  try {
-    const { getStripe } = await import('@/lib/stripe/client');
-    getStripe();
-    report['_stripe_client'] = 'OK';
-  } catch (e) {
-    report['_stripe_client'] = `FAIL: ${e instanceof Error ? e.message : String(e)}`;
-  }
+  report['_stripe_secret_key_present'] = process.env.STRIPE_SECRET_KEY ? 'yes' : 'no';
+  report['_stripe_webhook_secret_present'] = process.env.STRIPE_WEBHOOK_SECRET ? 'yes' : 'no';
 
   return NextResponse.json(report);
 }
