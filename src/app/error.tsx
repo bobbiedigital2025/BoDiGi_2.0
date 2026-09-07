@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { Sparkles, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
 
@@ -12,8 +13,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log to console — wire to Sentry or other monitoring later
-    console.error('AppForge error:', error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (
