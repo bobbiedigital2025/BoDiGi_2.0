@@ -133,8 +133,9 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
   const readmeFile = docsFiles.find(f => f.path.endsWith('README.md'));
   const pitchFile = docsFiles.find(f => f.path.endsWith('INVESTOR_PITCH.md'));
   const realityFile = docsFiles.find(f => f.path.endsWith('REALITY_CHECK.md'));
-  // Legacy: single docs file that isn't one of the three known names
-  const legacyDocs = docsFiles.filter(f => f !== readmeFile && f !== pitchFile && f !== realityFile);
+  const launchFile = docsFiles.find(f => f.path.endsWith('LAUNCH_GUIDE.md'));
+  // Legacy: single docs file that isn't one of the known names
+  const legacyDocs = docsFiles.filter(f => f !== readmeFile && f !== pitchFile && f !== realityFile && f !== launchFile);
 
   const statusColor = state.status === 'done' ? '#10b981' : state.status === 'failed' ? '#ef4444' : '#a855f7';
   const statusLabel = state.status === 'done' ? 'Build Complete' : state.status === 'failed' ? 'Build Failed' : 'Building...';
@@ -356,12 +357,18 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
                       🔍 Reality Check
                     </button>
                   )}
+                  {launchFile && (
+                    <button className="doc-btn" data-doc="launch" style={{ padding: '0.75rem 1.25rem', borderRadius: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#999', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
+                      🚀 Launch Guide
+                    </button>
+                  )}
                 </div>
 
                 {/* Document panels */}
                 {readmeFile && <div id="doc-readme" className="doc-panel">{renderMarkdown(readmeFile.content)}</div>}
                 {pitchFile && <div id="doc-pitch" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(pitchFile.content)}</div>}
                 {realityFile && <div id="doc-reality" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(realityFile.content)}</div>}
+                {launchFile && <div id="doc-launch" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(launchFile.content)}</div>}
                 {legacyDocs.map((f, i) => (
                   <div key={i}>{renderMarkdown(f.content)}</div>
                 ))}

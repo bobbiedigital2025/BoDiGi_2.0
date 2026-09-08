@@ -59,34 +59,40 @@ Respond with markdown only, using EXACTLY this structure:
 (the investor one-pager here)
 ===REALITY_CHECK===
 (the honest viability analysis here)
+===LAUNCH_GUIDE===
+(the step-by-step go-live guide here)
 
 DOCUMENT 1 — README.md: project title and summary, target audience, feature list, tech stack table, architecture overview, data models, API endpoints, page routes, getting started instructions, testing instructions, deployment instructions with required environment variables, compliance notes, and monetization notes.
 
 DOCUMENT 2 — INVESTOR_PITCH.md: a one-page pitch an entrepreneur could hand to an investor or partner. Include: the one-line pitch, the problem, the solution, target market and audience, revenue model with realistic pricing, ROI analysis (cost to build with BoDiGi 2.0 subscription vs typical agency/freelance quote of $10,000–$25,000, plus time-to-market savings), competitive advantages, growth path (first 90 days), and the ask. Write it about THIS specific app idea, not generic startup filler. Use realistic, defensible numbers — no hype.
 
-DOCUMENT 3 — REALITY_CHECK.md: an honest viability analysis. Include: strengths of this idea (pros), weaknesses and risks (cons) — be genuinely honest here, every idea has real cons, what to validate first before spending money, the single biggest risk, and a realistic success difficulty rating (easy/moderate/hard/very hard) with one sentence of justification. This document builds trust by telling the truth — do not sugarcoat.`;
+DOCUMENT 3 — REALITY_CHECK.md: an honest viability analysis. Include: strengths of this idea (pros), weaknesses and risks (cons) — be genuinely honest here, every idea has real cons, what to validate first before spending money, the single biggest risk, and a realistic success difficulty rating (easy/moderate/hard/very hard) with one sentence of justification. This document builds trust by telling the truth — do not sugarcoat.
+
+DOCUMENT 4 — LAUNCH_GUIDE.md: a numbered, step-by-step go-live manual written for a NON-TECHNICAL founder who has never deployed software. Assume zero knowledge. Include, tailored to THIS app's tech stack and features: (1) the accounts they need to create (e.g. Vercel, Supabase, Stripe) with exact signup URLs; (2) every API key/secret they must collect, with the exact dashboard navigation path to find each one (e.g. "Stripe → Developers → API keys → Secret key") and the exact env var name to paste it into; (3) how to deploy (push to GitHub, import into Vercel, which env vars to add in the Vercel dashboard); (4) how to connect a custom domain (where to buy one, what DNS records to add); (5) a pre-launch checklist (test signup, test payment with Stripe test card 4242..., check on a phone); (6) what to do when something breaks (where errors appear, who to ask). Use exact button names and URLs. No unexplained jargon — if you must use a technical term, explain it in five words. Every step should be small enough to do from a phone.`;
 
 /**
  * Parse the docs agent's three-document response.
  * Falls back gracefully: if delimiters are missing, treats the whole
  * response as the README (legacy behavior).
  */
-export function parseDocsResponse(raw: string): { readme: string; investorPitch: string; realityCheck: string } {
+export function parseDocsResponse(raw: string): { readme: string; investorPitch: string; realityCheck: string; launchGuide: string } {
   const strip = (s: string) => s.replace(/^```markdown\s*/i, '').replace(/```\s*$/, '').trim();
 
   const readmeMatch = raw.match(/===README===\s*([\s\S]*?)(?====INVESTOR_PITCH===|$)/i);
   const pitchMatch = raw.match(/===INVESTOR_PITCH===\s*([\s\S]*?)(?====REALITY_CHECK===|$)/i);
-  const realityMatch = raw.match(/===REALITY_CHECK===\s*([\s\S]*?)$/i);
+  const realityMatch = raw.match(/===REALITY_CHECK===\s*([\s\S]*?)(?====LAUNCH_GUIDE===|$)/i);
+  const launchMatch = raw.match(/===LAUNCH_GUIDE===\s*([\s\S]*?)$/i);
 
-  if (!readmeMatch && !pitchMatch && !realityMatch) {
+  if (!readmeMatch && !pitchMatch && !realityMatch && !launchMatch) {
     // Legacy single-document response
-    return { readme: strip(raw), investorPitch: '', realityCheck: '' };
+    return { readme: strip(raw), investorPitch: '', realityCheck: '', launchGuide: '' };
   }
 
   return {
     readme: strip(readmeMatch?.[1] || ''),
     investorPitch: strip(pitchMatch?.[1] || ''),
     realityCheck: strip(realityMatch?.[1] || ''),
+    launchGuide: strip(launchMatch?.[1] || ''),
   };
 }
 
@@ -207,6 +213,7 @@ export interface ProjectDocs {
   readme: string;
   investorPitch: string;
   realityCheck: string;
+  launchGuide: string;
 }
 
 export async function runDocsAgent(
@@ -219,7 +226,7 @@ export async function runDocsAgent(
     try {
       const specs = state.specs!;
       const arch = state.architecture;
-      const prompt = `Write the three documents for this application:\n\nName: ${state.name}\nIdea: ${state.idea}\nSummary: ${specs.summary}\nTarget audience: ${specs.targetAudience}\nFeatures: ${specs.features.map(f => `${f.name} (${f.priority})`).join(', ')}\nTech stack: ${JSON.stringify(specs.techStack)}\nData models: ${(arch?.dataModels || []).map(m => m.name).join(', ')}\nAPI endpoints: ${(arch?.apiEndpoints || []).map(e => `${e.method} ${e.path}`).join(', ')}\nMonetization: ${specs.monetization}\nMarketplace: ${specs.marketplace}\nCompliance: ${specs.compliance.join(', ')}\n\nRespond with the three documents separated by the exact delimiter lines.`;
+      const prompt = `Write the four documents for this application:\n\nName: ${state.name}\nIdea: ${state.idea}\nSummary: ${specs.summary}\nTarget audience: ${specs.targetAudience}\nFeatures: ${specs.features.map(f => `${f.name} (${f.priority})`).join(', ')}\nTech stack: ${JSON.stringify(specs.techStack)}\nData models: ${(arch?.dataModels || []).map(m => m.name).join(', ')}\nAPI endpoints: ${(arch?.apiEndpoints || []).map(e => `${e.method} ${e.path}`).join(', ')}\nMonetization: ${specs.monetization}\nMarketplace: ${specs.marketplace}\nCompliance: ${specs.compliance.join(', ')}\n\nRespond with the four documents separated by the exact delimiter lines.`;
       const raw = await callAI(DOCS_AGENT_SYSTEM_PROMPT, prompt);
       const docs = parseDocsResponse(raw);
 
@@ -228,6 +235,7 @@ export async function runDocsAgent(
         readme: docs.readme || fallbackReadme,
         investorPitch: docs.investorPitch || generateDefaultInvestorPitch(state),
         realityCheck: docs.realityCheck || generateDefaultRealityCheck(state),
+        launchGuide: docs.launchGuide || generateDefaultLaunchGuide(state),
       };
     } catch (err) {
       log('warn', `Docs AI call failed, using defaults: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -237,6 +245,7 @@ export async function runDocsAgent(
     readme: fallbackReadme,
     investorPitch: generateDefaultInvestorPitch(state),
     realityCheck: generateDefaultRealityCheck(state),
+    launchGuide: generateDefaultLaunchGuide(state),
   };
 }
 
@@ -282,6 +291,67 @@ Whether ${state.specs?.targetAudience || 'target users'} will actually pay. Talk
 
 ## Difficulty Rating
 **Moderate** — the build is the easy part; distribution is the challenge.
+`;
+}
+
+function generateDefaultLaunchGuide(state: ProjectState): string {
+  return `# Launch Guide: ${state.name}
+
+This guide takes you from "my app is built" to "real people can use it." Every step is small. You can do all of this from a phone, but a laptop makes it easier. Total time: about one hour.
+
+## Step 1 — Create your accounts (15 minutes)
+You need three free accounts. They are like the electricity, water, and cash register for your app:
+
+1. **GitHub** (stores your code): go to github.com → Sign up
+2. **Vercel** (runs your app on the internet): go to vercel.com → Sign up → choose "Continue with GitHub"
+3. **Supabase** (your database): go to supabase.com → Start your project → sign in with GitHub
+
+If your app takes payments, also create a **Stripe** account at stripe.com.
+
+## Step 2 — Download your code (2 minutes)
+In your BoDiGi 2.0 dashboard, open this project and click **Download ZIP**. Unzip it somewhere you can find it.
+
+## Step 3 — Put your code on GitHub (10 minutes)
+1. On github.com, click the **+** (top right) → **New repository**
+2. Name it after your app, keep it Private, click **Create repository**
+3. Follow the "uploading an existing project" link, or use GitHub Desktop (easiest: desktop.github.com)
+
+## Step 4 — Deploy to Vercel (10 minutes)
+1. On vercel.com, click **Add New → Project**
+2. Choose **Import Git Repository** and pick your app's repo
+3. Vercel detects Next.js automatically — do not change the build settings
+4. Before clicking Deploy, open **Environment Variables** — you will add keys here in Step 5
+
+## Step 5 — Add your keys (10 minutes)
+Your app needs secret keys to talk to its database and payment system. Think of these as passwords that only your app knows:
+
+1. In Supabase: open your project → **Project Settings → API** → copy the **Project URL** and the **anon public** and **service_role** keys
+2. In Vercel (Environment Variables page from Step 4), add:
+   - \`NEXT_PUBLIC_SUPABASE_URL\` = your Project URL
+   - \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` = your anon public key
+   - \`SUPABASE_SERVICE_ROLE_KEY\` = your service_role key
+3. If using Stripe: in stripe.com → **Developers → API keys** → copy the **Secret key** → add as \`STRIPE_SECRET_KEY\`
+4. Click **Deploy**. Wait about 2 minutes. Vercel gives you a live URL like \`yourapp.vercel.app\`.
+
+## Step 6 — Test everything (10 minutes)
+- Open your URL in an incognito/private window
+- Create an account and log in
+- Try the main feature of your app
+- If payments are enabled, use the Stripe test card: **4242 4242 4242 4242**, any future expiry, any CVC (this is fake money — no real charge)
+- Open it on your phone
+
+## Step 7 — Connect your own domain (optional, 15 minutes + waiting)
+1. Buy a domain at namecheap.com or porkbun.com (about $10/year)
+2. In Vercel: your project → **Settings → Domains** → type your domain → Vercel shows you 1-2 DNS records
+3. In your domain seller's dashboard, find **DNS settings** and add exactly those records
+4. Wait 10 minutes to 24 hours — then your app lives at your own address
+
+## When something breaks
+- **Red or blank page**: Vercel → your project → **Logs** shows the error. Copy the last lines.
+- **Login works locally but not live**: an env var is missing or misspelled — re-check Step 5.
+- **Ask for help**: paste the error lines into your BoDiGi 2.0 Setup Agent chat — it can read them and tell you the fix.
+
+You did it. ${state.name} is a real business on the internet.
 `;
 }
 

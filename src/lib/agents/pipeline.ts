@@ -240,6 +240,7 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
             { path: 'README.md', content: docs.readme, agent: 'docs' as const, status: 'generated' as const },
             { path: 'INVESTOR_PITCH.md', content: docs.investorPitch, agent: 'docs' as const, status: 'generated' as const },
             { path: 'REALITY_CHECK.md', content: docs.realityCheck, agent: 'docs' as const, status: 'generated' as const },
+            { path: 'LAUNCH_GUIDE.md', content: docs.launchGuide, agent: 'docs' as const, status: 'generated' as const },
           ].filter(f => f.content.length > 0);
           project.files.push(...docFiles);
           output = { files: docFiles };
