@@ -400,6 +400,27 @@ export class AppForgeOrchestrator {
   }
 
   /**
+   * Reset a failed task so the pipeline retries it. Called by the healing
+   * agent after it has produced a repair diagnosis. The diagnosis is attached
+   * to the task input so the retrying agent can see what went wrong.
+   */
+  requeueFailedTask(taskId: string, healingNote: string): boolean {
+    const task = this.taskQueue.find((t) => t.id === taskId);
+    if (!task || task.status !== 'failed') return false;
+
+    task.status = 'pending';
+    task.error = null;
+    task.retryCount = 0;
+    task.maxRetries = 2; // one more honest attempt cycle after healing
+    task.input = { ...(task.input as Record<string, unknown>), healingNote };
+    this.log(task.role, 'info', `Re-queued after healing: ${task.title}`);
+    // If the build had been marked failed, bring it back to building
+    if (this.state.status === 'failed') this.state.status = 'building';
+    this.updateState();
+    return true;
+  }
+
+  /**
    * Apply a completed task's output to the shared project state.
    */
   private applyTaskOutput(task: AgentTask): void {
@@ -437,6 +458,22 @@ export class AppForgeOrchestrator {
         this.state.currentPhase = 6;
         this.state.status = 'done';
         break;
+      case 'healing': {
+        // Healing completed — re-queue the originally failed task with the
+        // diagnosis attached so its retry knows what went wrong. Skip if the
+        // healing agent judged the failure non-retriable.
+        const out = (task.output || {}) as Record<string, unknown>;
+        const input = task.input as { failedTaskId?: string } | null;
+        if (out.healed === false) {
+          this.log('healing', 'warn', 'Not re-queuing — failure needs human attention');
+          break;
+        }
+        const note = String(out.diagnosis || 'Previous failure was analyzed; retry with fresh attempt.');
+        if (input?.failedTaskId) {
+          this.requeueFailedTask(input.failedTaskId, note);
+        }
+        break;
+      }
     }
   }
 

@@ -218,6 +218,11 @@ export default function LandingPage() {
                 desc: 'No hype. A straight assessment of your biggest risks, what to validate first, and the difficulty rating — so you build the version that can actually win.',
               },
               {
+                icon: Rocket,
+                title: 'A step-by-step launch guide',
+                desc: 'A plain-English go-live manual written for non-technical founders: which accounts to create, which keys to copy, how to deploy, and how to connect your own domain.',
+              },
+              {
                 icon: Code2,
                 title: 'The full source code',
                 desc: 'When you upgrade, everything is yours: download the ZIP or push to GitHub. No lock-in, no ransom — it deploys anywhere.',

@@ -249,8 +249,50 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
 
         // ─── Healing Agent ───
         case 'healing': {
-          await delay(1000);
-          output = { healed: true, fix: 'Applied fallback strategy' };
+          const healInput = task.input as { failedTaskId?: string; error?: string; originalTask?: { title?: string; role?: string } } | null;
+          const failedTitle = healInput?.originalTask?.title || 'unknown task';
+          const failedRole = healInput?.originalTask?.role || 'unknown';
+          const failError = healInput?.error || 'unknown error';
+
+          orchestrator.log('healing', 'info', `Analyzing failure in "${failedTitle}": ${failError}`);
+
+          const HEALING_PROMPT = `You are the healing agent for an AI app-building pipeline. Another agent's task failed. Diagnose the root cause and produce a concrete repair strategy.
+
+Failed task: "${failedTitle}" (agent role: ${failedRole})
+Error: ${failError}
+
+Classify the failure into exactly one category and respond with ONLY valid JSON:
+{"category":"api_timeout|ai_parse_error|rate_limit|missing_dependency|bad_input|transient_network|unknown","diagnosis":"one sentence: what actually went wrong","repairStrategy":"one sentence: what the retry should do differently","retriable":true|false}
+
+Rules: rate limits and timeouts ARE retriable (retry with backoff). AI parse errors ARE retriable (retry asks the model for stricter JSON). Missing dependencies and bad config are NOT retriable by the same agent.`;
+
+          let diagnosis = `Failure in "${failedTitle}" was logged; retrying with fresh attempt.`;
+          let retriable = true;
+
+          if (hasAIKey()) {
+            try {
+              const raw = await callAI(HEALING_PROMPT, `Diagnose this pipeline failure. Failed task: ${failedTitle}. Role: ${failedRole}. Error: ${failError}`);
+              const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+              const parsed = JSON.parse(cleaned);
+              diagnosis = String(parsed.diagnosis || diagnosis);
+              retriable = parsed.retriable !== false;
+              const strategy = String(parsed.repairStrategy || '');
+              const category = String(parsed.category || 'unknown');
+              orchestrator.log('healing', 'info', `Diagnosis (${category}): ${diagnosis}`);
+              if (strategy) orchestrator.log('healing', 'info', `Repair strategy: ${strategy}`);
+              diagnosis = `${diagnosis}${strategy ? ` Repair: ${strategy}` : ''}`;
+            } catch (err) {
+              orchestrator.log('healing', 'warn', `Healing AI call failed, using generic retry: ${err instanceof Error ? err.message : 'unknown'}`);
+            }
+          } else {
+            await delay(800);
+          }
+
+          if (!retriable) {
+            orchestrator.log('healing', 'warn', `Failure in "${failedTitle}" judged non-retriable — leaving for user attention`);
+          }
+
+          output = { healed: retriable, diagnosis };
           break;
         }
 
