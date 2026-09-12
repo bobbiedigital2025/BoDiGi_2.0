@@ -33,6 +33,12 @@ function SignupForm() {
       setError(error);
     } else {
       setSuccess(true);
+      // Fire-and-forget welcome email — never blocks the redirect
+      fetch('/api/email/welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name }),
+      }).catch(() => {});
       setTimeout(() => router.push('/dashboard'), 2000);
     }
   };

@@ -8,7 +8,8 @@
  */
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
-const FROM_ADDRESS = process.env.EMAIL_FROM || 'BoDiGi 2.0 <notifications@appforge.dev>';
+const FROM_ADDRESS = process.env.EMAIL_FROM || 'BoDiGi 2.0 <onboarding@resend.dev>';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://bo-di-gi-2-0-plmk.vercel.app';
 
 interface SendEmailOptions {
   to: string;
@@ -64,7 +65,7 @@ function baseTemplate(content: string): string {
     ${content}
     <p style="color:#525252;font-size:12px;text-align:center;margin-top:40px;">
       BoDiGi 2.0 — AI-powered application factory<br>
-      <a href="https://bobbiedigital2025-appforge-dev.vercel.app" style="color:#8b5cf6;">appforge.dev</a>
+      <a href="${APP_URL}" style="color:#8b5cf6;">bodigi.app</a>
     </p>
   </div>
 </body>
@@ -105,8 +106,33 @@ export async function sendUpgradeConfirmationEmail(to: string, tierName: string)
         Head to your dashboard to download your projects or start a new build.
       </p>
       <div style="text-align:center;margin:32px 0;">
-        <a href="https://bobbiedigital2025-appforge-dev.vercel.app/dashboard" style="display:inline-block;padding:14px 32px;border-radius:8px;background:linear-gradient(135deg,#8b5cf6,#d946ef);color:#fff;text-decoration:none;font-weight:600;">
+        <a href="${APP_URL}/dashboard" style="display:inline-block;padding:14px 32px;border-radius:8px;background:linear-gradient(135deg,#8b5cf6,#d946ef);color:#fff;text-decoration:none;font-weight:600;">
           Open Dashboard
+        </a>
+      </div>
+    `),
+  });
+}
+
+export async function sendWelcomeEmail(to: string, name?: string) {
+  const greeting = name ? `Hey ${name.split(' ')[0]}` : 'Hey there';
+  return sendEmail({
+    to,
+    subject: 'Welcome to BoDiGi 2.0 — your idea is about to become an app',
+    html: baseTemplate(`
+      <h2 style="color:#fff;font-size:18px;">${greeting}, you're in. ⚡</h2>
+      <p style="color:#a3a3a3;font-size:14px;line-height:1.6;">
+        You bring the idea. We build the business. Describe your app in one sentence
+        and nine specialized AI agents will spec it, architect it, write the code,
+        test it, and hand you a live preview — plus an investor one-pager, an honest
+        reality check, and a step-by-step launch guide.
+      </p>
+      <p style="color:#a3a3a3;font-size:14px;line-height:1.6;">
+        Your first build is free. It takes about five minutes.
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${APP_URL}/dashboard" style="display:inline-block;padding:14px 32px;border-radius:8px;background:linear-gradient(135deg,#8b5cf6,#d946ef);color:#fff;text-decoration:none;font-weight:600;">
+          Build My First App
         </a>
       </div>
     `),
