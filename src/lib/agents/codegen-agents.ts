@@ -472,7 +472,7 @@ export default function SignupPage() {
       <Card className="max-w-md w-full">
         <CardHeader>
           <CardTitle>Create account</CardTitle>
-          <CardDescription>Start building with AppForge</CardDescription>
+          <CardDescription>Start building today</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

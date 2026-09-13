@@ -82,7 +82,7 @@ export async function GET(
   }
 
   // Include manifest
-  zip.file('appforge.manifest.json', JSON.stringify({
+  zip.file('bodigi.manifest.json', JSON.stringify({
     id: projectId,
     name: projectName,
     idea: projectIdea,

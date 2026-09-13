@@ -279,7 +279,7 @@ function generateDefaultRealityCheck(state: ProjectState): string {
 ## Pros
 - Clear target audience: ${state.specs?.targetAudience || 'defined users'}
 - Focused feature set — avoids scope creep
-- Low cost to build and test with AppForge
+- Low cost to build and test
 
 ## Cons
 - Unvalidated demand — the biggest risk for any new product
