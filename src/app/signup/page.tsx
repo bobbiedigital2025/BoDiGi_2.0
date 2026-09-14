@@ -46,7 +46,11 @@ function SignupForm() {
   const handleOAuth = async (provider: 'google' | 'github') => {
     setError(null);
     const { error } = await signInWithOAuth(provider);
-    if (error) setError(error);
+    if (error) {
+      setError(
+        `${provider === 'google' ? 'Google' : 'GitHub'} sign-up isn't set up yet — email + password works right now. (We're enabling social login soon.)`
+      );
+    }
   };
 
   return (
