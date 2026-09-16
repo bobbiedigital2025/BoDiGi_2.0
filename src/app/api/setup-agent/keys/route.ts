@@ -23,6 +23,7 @@ function detectProvider(keyName: string): string {
   if (name.includes('vercel')) return 'vercel';
   if (name.includes('openai')) return 'openai';
   if (name.includes('anthropic')) return 'anthropic';
+  if (name.includes('github')) return 'github';
   return 'custom';
 }
 
@@ -38,6 +39,9 @@ function validateKey(keyName: string, keyValue: string): { valid: boolean; messa
   }
   if (name.includes('supabase_url') && !keyValue.includes('supabase.co')) {
     return { valid: false, message: 'Supabase URLs usually contain "supabase.co". Make sure you copied the Project URL, not the key.' };
+  }
+  if (name.includes('github') && !keyValue.startsWith('github_pat_') && !keyValue.startsWith('ghp_') && !keyValue.startsWith('gho_')) {
+    return { valid: false, message: 'GitHub tokens usually start with "github_pat_" (fine-grained) or "ghp_" (classic). Make sure you copied the full token.' };
   }
 
   return { valid: true };
