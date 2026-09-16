@@ -85,6 +85,8 @@ export const RATE_LIMITS = {
   setupAgent: { limit: 30, windowSeconds: 3600 },    // 30/hour
   /** Key storage writes */
   keyStorage: { limit: 20, windowSeconds: 3600 },    // 20/hour
+  /** GitHub export — each export makes 2 GitHub API calls per file, so keep tight */
+  githubExport: { limit: 5, windowSeconds: 3600 },    // 5/hour
   /** Stripe checkout */
   checkout: { limit: 10, windowSeconds: 3600 },      // 10/hour
   /** General API */

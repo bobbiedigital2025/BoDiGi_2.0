@@ -52,8 +52,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  // Rate limit exports
-  const rl = rateLimit(getClientId(request, user.id), RATE_LIMITS.keyStorage);
+  // Rate limit exports (separate bucket — each export makes 2 GitHub API calls per file)
+  const rl = rateLimit(getClientId(request, user.id), RATE_LIMITS.githubExport);
   if (!rl.success) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
   }

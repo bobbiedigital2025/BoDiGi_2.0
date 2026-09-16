@@ -62,7 +62,6 @@ export async function GET(request: NextRequest) {
       const createdAt = new Date(project.created_at);
       const expiresAt = new Date(createdAt);
       expiresAt.setDate(expiresAt.getDate() + days);
-
       const { error } = await supabase
         .from('projects')
         .update({ preview_expires_at: expiresAt.toISOString() })
@@ -70,6 +69,41 @@ export async function GET(request: NextRequest) {
 
       if (error) results.errors.push(`backfill ${project.id}: ${error.message}`);
       else results.backfilled += 1;
+    }
+
+    // 1.5 Starter upgrade fix: users who built on Free (7-day expiry) then
+    // upgraded to Starter keep the 7-day clock — extend to 30 days from creation
+    const { data: activePreviews, error: activeError } = await supabase
+      .from('projects')
+      .select('id, user_id, created_at, preview_expires_at')
+      .eq('is_preview', true)
+      .not('preview_expires_at', 'is', null)
+      .gt('preview_expires_at', now.toISOString());
+
+    if (activeError) results.errors.push(`starter-fix: ${activeError.message}`);
+
+    for (const project of activePreviews || []) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tier')
+        .eq('id', project.user_id)
+        .single();
+
+      if (profile?.tier !== 'starter') continue;
+
+      const createdAt = new Date(project.created_at);
+      const thirtyDays = new Date(createdAt);
+      thirtyDays.setDate(thirtyDays.getDate() + 30);
+      const current = new Date(project.preview_expires_at);
+
+      // Only extend if the current expiry is sooner than 30 days from creation
+      if (current < thirtyDays) {
+        const { error } = await supabase
+          .from('projects')
+          .update({ preview_expires_at: thirtyDays.toISOString() })
+          .eq('id', project.id);
+        if (error) results.errors.push(`starter-extend ${project.id}: ${error.message}`);
+      }
     }
 
     // 2. Send expiry warning emails: free-tier projects expiring within 24 hours
@@ -102,7 +136,7 @@ export async function GET(request: NextRequest) {
         profile.email,
         project.name || 'Your app',
         1,
-        `https://bobbiedigital2025-appforge-dev.vercel.app/pricing`
+        `${process.env.NEXT_PUBLIC_APP_URL || 'https://bo-di-gi-2-0-plmk.vercel.app'}/pricing`
       );
 
       if (sent) results.warningsSent += 1;

@@ -4,8 +4,9 @@ import { withSentryConfig } from "@sentry/nextjs";
 const securityHeaders = [
   // Force HTTPS for a year (browsers remember, even on first visit's redirect)
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
-  // Don't let other sites embed us in iframes (clickjacking protection)
-  { key: "X-Frame-Options", value: "DENY" },
+  // Allow same-origin framing — the dashboard embeds /preview in an iframe.
+  // DENY would break the Live Preview tab.
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
   // Don't guess MIME types — blocks content sniffing attacks
   { key: "X-Content-Type-Options", value: "nosniff" },
   // Hide our tech stack from attackers probing the server
