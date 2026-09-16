@@ -134,8 +134,9 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
   const pitchFile = docsFiles.find(f => f.path.endsWith('INVESTOR_PITCH.md'));
   const realityFile = docsFiles.find(f => f.path.endsWith('REALITY_CHECK.md'));
   const launchFile = docsFiles.find(f => f.path.endsWith('LAUNCH_GUIDE.md'));
+  const marketingFile = docsFiles.find(f => f.path.endsWith('MARKETING_KIT.md'));
   // Legacy: single docs file that isn't one of the known names
-  const legacyDocs = docsFiles.filter(f => f !== readmeFile && f !== pitchFile && f !== realityFile && f !== launchFile);
+  const legacyDocs = docsFiles.filter(f => f !== readmeFile && f !== pitchFile && f !== realityFile && f !== launchFile && f !== marketingFile);
 
   const statusColor = state.status === 'done' ? '#10b981' : state.status === 'failed' ? '#ef4444' : '#a855f7';
   const statusLabel = state.status === 'done' ? 'Build Complete' : state.status === 'failed' ? 'Build Failed' : 'Building...';
@@ -362,6 +363,11 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
                       🚀 Launch Guide
                     </button>
                   )}
+                  {marketingFile && (
+                    <button className="doc-btn" data-doc="marketing" style={{ padding: '0.75rem 1.25rem', borderRadius: '0.75rem', background: 'linear-gradient(135deg, rgba(124,58,237,0.15), rgba(192,38,211,0.15))', border: '1px solid rgba(192,38,211,0.4)', color: '#e879f9', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
+                      ✨ Marketing Kit <span style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.05em', background: 'linear-gradient(135deg, #7c3aed, #c026d3)', padding: '0.125rem 0.375rem', borderRadius: '0.25rem', color: '#fff', verticalAlign: 'middle', marginLeft: '0.25rem' }}>PRO</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Document panels */}
@@ -369,6 +375,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
                 {pitchFile && <div id="doc-pitch" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(pitchFile.content)}</div>}
                 {realityFile && <div id="doc-reality" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(realityFile.content)}</div>}
                 {launchFile && <div id="doc-launch" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(launchFile.content)}</div>}
+                {marketingFile && <div id="doc-marketing" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(marketingFile.content)}</div>}
                 {legacyDocs.map((f, i) => (
                   <div key={i}>{renderMarkdown(f.content)}</div>
                 ))}

@@ -70,6 +70,31 @@ DOCUMENT 3 — REALITY_CHECK.md: an honest viability analysis. Include: strength
 
 DOCUMENT 4 — LAUNCH_GUIDE.md: a numbered, step-by-step go-live manual written for a NON-TECHNICAL founder who has never deployed software. Assume zero knowledge. Include, tailored to THIS app's tech stack and features: (1) the accounts they need to create (e.g. Vercel, Supabase, Stripe) with exact signup URLs; (2) every API key/secret they must collect, with the exact dashboard navigation path to find each one (e.g. "Stripe → Developers → API keys → Secret key") and the exact env var name to paste it into; (3) how to deploy (push to GitHub, import into Vercel, which env vars to add in the Vercel dashboard); (4) how to connect a custom domain (where to buy one, what DNS records to add); (5) a pre-launch checklist (test signup, test payment with Stripe test card 4242..., check on a phone); (6) what to do when something breaks (where errors appear, who to ask). Use exact button names and URLs. No unexplained jargon — if you must use a technical term, explain it in five words. Every step should be small enough to do from a phone.`;
 
+export const MARKETING_AGENT_SYSTEM_PROMPT = `You are a senior growth marketer AND brand strategist. Given a project specification, write a complete launch marketing kit for the application, separated by exact delimiter lines.
+
+Respond with markdown only, using EXACTLY this structure:
+
+===MARKETING_KIT===
+(the full marketing kit here)
+
+The kit must include these sections, written about THIS specific app — not generic marketing filler:
+
+1. BRAND VOICE — the one-line positioning statement, 3-word brand personality, tagline options (3), and a "we sound like / we never sound like" pair.
+
+2. LANDING PAGE COPY — hero headline (under 10 words), subheadline, 3 benefit bullets written as outcomes not features, social proof line, and primary CTA button text.
+
+3. LAUNCH POSTS — a Product Hunt launch post (title + tagline + first comment telling the maker story), a Hacker News post (no marketing speak, honest and technical), and a Reddit post for the most relevant subreddit (following that community's norms, leading with the problem not the product).
+
+4. SOCIAL CONTENT — 5 tweets/X posts (varied: one launch announcement, one problem stat, one behind-the-scenes, one user-outcome story, one question that starts conversation), 1 LinkedIn post (founder-voice story arc), and 3 Instagram/TikTok caption ideas with hook lines.
+
+5. EMAIL SEQUENCES — (a) a 3-email pre-launch waitlist sequence (tease → value → launch day), and (b) a 5-email onboarding sequence for new users (welcome → quick win → feature spotlight → social proof → upgrade path). Subject lines under 45 characters.
+
+6. PRESS KIT — a 100-word boilerplate company description, 3 ready-to-pitch press angles, and a short founder bio template.
+
+7. FIRST 30 DAYS PLAN — a week-by-week marketing calendar with specific actions, channels, and one measurable goal per week. Realistic for a solo founder with no marketing budget.
+
+Rules: use real numbers where possible, name actual platforms and communities, write copy a founder could paste directly into a website or social post with zero editing, and keep every piece honest — no hype words like "revolutionary" or "game-changing".`;
+
 /**
  * Parse the docs agent's three-document response.
  * Falls back gracefully: if delimiters are missing, treats the whole
@@ -94,6 +119,12 @@ export function parseDocsResponse(raw: string): { readme: string; investorPitch:
     realityCheck: strip(realityMatch?.[1] || ''),
     launchGuide: strip(launchMatch?.[1] || ''),
   };
+}
+
+export function parseMarketingResponse(raw: string): string {
+  const strip = (s: string) => s.replace(/^```markdown\s*/i, '').replace(/```\s*$/, '').trim();
+  const match = raw.match(/===MARKETING_KIT===\s*([\s\S]*?)$/i);
+  return match ? strip(match[1]) : strip(raw);
 }
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -214,11 +245,13 @@ export interface ProjectDocs {
   investorPitch: string;
   realityCheck: string;
   launchGuide: string;
+  marketingKit: string;
 }
 
 export async function runDocsAgent(
   state: ProjectState,
-  log: (level: 'warn', msg: string) => void
+  log: (level: 'warn', msg: string) => void,
+  options?: { includeMarketing?: boolean }
 ): Promise<ProjectDocs> {
   const fallbackReadme = generateDefaultReadme(state);
 
@@ -230,12 +263,26 @@ export async function runDocsAgent(
       const raw = await callAI(DOCS_AGENT_SYSTEM_PROMPT, prompt);
       const docs = parseDocsResponse(raw);
 
+      // Marketing kit — Pro/Enterprise perk, generated as a separate AI call
+      let marketingKit = '';
+      if (options?.includeMarketing) {
+        try {
+          const marketingPrompt = `Write the launch marketing kit for this application:\n\nName: ${state.name}\nIdea: ${state.idea}\nSummary: ${specs.summary}\nTarget audience: ${specs.targetAudience}\nKey features: ${specs.features.slice(0, 5).map(f => f.name).join(', ')}\nMonetization: ${specs.monetization}\n\nRespond with the marketing kit after the ===MARKETING_KIT=== delimiter line.`;
+          const marketingRaw = await callAI(MARKETING_AGENT_SYSTEM_PROMPT, marketingPrompt);
+          marketingKit = parseMarketingResponse(marketingRaw);
+        } catch (err) {
+          log('warn', `Marketing kit AI call failed: ${err instanceof Error ? err.message : 'unknown'}`);
+          marketingKit = generateDefaultMarketingKit(state);
+        }
+      }
+
       // Ensure nothing comes back empty
       return {
         readme: docs.readme || fallbackReadme,
         investorPitch: docs.investorPitch || generateDefaultInvestorPitch(state),
         realityCheck: docs.realityCheck || generateDefaultRealityCheck(state),
         launchGuide: docs.launchGuide || generateDefaultLaunchGuide(state),
+        marketingKit,
       };
     } catch (err) {
       log('warn', `Docs AI call failed, using defaults: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -246,6 +293,7 @@ export async function runDocsAgent(
     investorPitch: generateDefaultInvestorPitch(state),
     realityCheck: generateDefaultRealityCheck(state),
     launchGuide: generateDefaultLaunchGuide(state),
+    marketingKit: options?.includeMarketing ? generateDefaultMarketingKit(state) : '',
   };
 }
 
@@ -352,6 +400,47 @@ Your app needs secret keys to talk to its database and payment system. Think of 
 - **Ask for help**: paste the error lines into your BoDiGi 2.0 Setup Agent chat — it can read them and tell you the fix.
 
 You did it. ${state.name} is a real business on the internet.
+`;
+}
+
+function generateDefaultMarketingKit(state: ProjectState): string {
+  const audience = state.specs?.targetAudience || 'your target users';
+  const features = (state.specs?.features || []).slice(0, 3).map(f => f.name).join(', ');
+  return `# Launch Marketing Kit: ${state.name}
+
+## Brand Voice
+**Positioning:** ${state.name} — ${state.specs?.summary || state.idea}
+**Personality:** Practical, honest, fast
+**Taglines:** Built for ${audience}. / From idea to live in days, not months. / The business builder.
+
+## Landing Page Copy
+**Hero:** ${state.name} — ${state.specs?.summary || state.idea}
+**Bullets:** ${features}
+**CTA:** Build your app now
+
+## Launch Posts
+**Product Hunt:** ${state.name} — ${state.specs?.summary || state.idea}. Built with AI agents in days instead of a $10K agency build.
+**Hacker News:** Show HN: I built ${state.name} with an AI agent pipeline — share your build story.
+**Reddit:** Post in the subreddit where ${audience} hang out. Lead with the problem you solve, not the product.
+
+## Social Content
+- Launch day: "${state.name} is live. ${state.specs?.summary || state.idea}."
+- Problem post: "How much did your last app build cost? We built ${state.name} for the price of a subscription."
+- Behind the scenes: "Watched AI agents write, test, and deploy ${state.name} — here's how it works."
+
+## Email Sequences
+**Waitlist:** (1) You're on the list — here's what's coming. (2) The problem ${state.name} solves. (3) We're live — your invite is inside.
+**Onboarding:** (1) Welcome — your first build. (2) Your quick win. (3) Feature spotlight. (4) What others built. (5) Ready for more?
+
+## Press Kit
+**Boilerplate:** ${state.name} is a ${state.specs?.monetization || 'subscription'} app built for ${audience}, delivering ${features}.
+**Angles:** (1) AI agents replacing agency builds. (2) Non-technical founders shipping real software. (3) The cost collapse: $25K → $19/month.
+
+## First 30 Days
+**Week 1:** Launch on Product Hunt + share build story. Goal: 100 visitors.
+**Week 2:** Post in 3 communities where ${audience} gather. Goal: 10 signups.
+**Week 3:** Email your waitlist weekly wins. Goal: first user build.
+**Week 4:** Collect testimonials, iterate on feedback. Goal: 5 active users.
 `;
 }
 

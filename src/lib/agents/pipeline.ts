@@ -233,14 +233,40 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
         // ─── Phase 7: Docs Agent ───
         case 'docs': {
           if (!hasAIKey()) await delay(1500);
+          // Marketing kit is a Pro/Enterprise perk — look up the owner's tier
+          let includeMarketing = false;
+          if (userId && hasSupabase()) {
+            try {
+              const { createClient } = await import('@supabase/supabase-js');
+              const supabase = createClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.SUPABASE_SERVICE_ROLE_KEY!
+              );
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('tier, role')
+                .eq('id', userId)
+                .single();
+              const tier = profile?.tier || 'free';
+              includeMarketing = ['pro', 'enterprise'].includes(tier) || profile?.role === 'admin';
+              if (includeMarketing) {
+                orchestrator.log('docs', 'info', 'Generating launch marketing kit (Pro perk)');
+              }
+            } catch (err) {
+              orchestrator.log('docs', 'warn', `Tier lookup failed, skipping marketing kit: ${err instanceof Error ? err.message : 'unknown'}`);
+            }
+          }
           const docs = await runDocsAgent(orchestrator.getState(), (level, msg) =>
             orchestrator.log('docs', level, msg)
-          );
+          , { includeMarketing });
           const docFiles = [
             { path: 'README.md', content: docs.readme, agent: 'docs' as const, status: 'generated' as const },
             { path: 'INVESTOR_PITCH.md', content: docs.investorPitch, agent: 'docs' as const, status: 'generated' as const },
             { path: 'REALITY_CHECK.md', content: docs.realityCheck, agent: 'docs' as const, status: 'generated' as const },
             { path: 'LAUNCH_GUIDE.md', content: docs.launchGuide, agent: 'docs' as const, status: 'generated' as const },
+            ...(docs.marketingKit
+              ? [{ path: 'MARKETING_KIT.md', content: docs.marketingKit, agent: 'docs' as const, status: 'generated' as const }]
+              : []),
           ].filter(f => f.content.length > 0);
           project.files.push(...docFiles);
           output = { files: docFiles };

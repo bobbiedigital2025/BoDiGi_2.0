@@ -64,6 +64,7 @@ const plans: Plan[] = [
       'GitHub export',
       'Preview never expires — your apps stay live',
       'Deploy-ready code — connect your own domain',
+      'Launch Marketing Kit — brand voice, social posts, emails, 30-day plan',
       'Priority AI pipeline',
       'Priority support',
     ],

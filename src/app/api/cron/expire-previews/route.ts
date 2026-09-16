@@ -47,18 +47,21 @@ export async function GET(request: NextRequest) {
     if (backfillError) throw backfillError;
 
     for (const project of noExpiry || []) {
-      // Only backfill for users currently on free tier
+      // Set expiry based on owner's tier: free = 7 days, starter = 30 days,
+      // pro/enterprise = never (no expiry set)
       const { data: profile } = await supabase
         .from('profiles')
         .select('tier')
         .eq('id', project.user_id)
         .single();
 
-      if (profile?.tier && profile.tier !== 'free') continue;
+      const tier = profile?.tier || 'free';
+      if (tier === 'pro' || tier === 'enterprise') continue;
 
+      const days = tier === 'starter' ? 30 : 7;
       const createdAt = new Date(project.created_at);
       const expiresAt = new Date(createdAt);
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      expiresAt.setDate(expiresAt.getDate() + days);
 
       const { error } = await supabase
         .from('projects')
@@ -84,14 +87,15 @@ export async function GET(request: NextRequest) {
     if (warningError) throw warningError;
 
     for (const project of expiringSoon || []) {
-      // Only for free-tier users
+      // Warning emails for free AND starter tier (both have expiring previews)
       const { data: profile } = await supabase
         .from('profiles')
         .select('tier, email')
         .eq('id', project.user_id)
         .single();
 
-      if (profile?.tier && profile.tier !== 'free') continue;
+      const tier = profile?.tier || 'free';
+      if (tier === 'pro' || tier === 'enterprise') continue;
       if (!profile?.email) continue;
 
       const { sent } = await sendExpiryWarningEmail(
@@ -115,14 +119,15 @@ export async function GET(request: NextRequest) {
     if (expireError) throw expireError;
 
     for (const project of expiredProjects || []) {
-      // Skip if user has upgraded to paid
+      // Pro/Enterprise upgraded — previews never expire, clear flags
       const { data: profile } = await supabase
         .from('profiles')
         .select('tier')
         .eq('id', project.user_id)
         .single();
 
-      if (profile?.tier && profile.tier !== 'free') {
+      const tier = profile?.tier || 'free';
+      if (tier === 'pro' || tier === 'enterprise') {
         // User upgraded — clear preview flags instead
         await supabase
           .from('projects')
@@ -131,7 +136,7 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      // Mark project as expired by flipping is_preview off and keeping the record
+      // Free (7 days) or Starter (30 days) past expiry → mark as expired
       const { error } = await supabase
         .from('projects')
         .update({
