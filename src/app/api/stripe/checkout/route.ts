@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { tier } = await request.json();
+  const { tier, promoCode } = await request.json();
 
   if (!tier || !['starter', 'pro', 'enterprise'].includes(tier)) {
     return NextResponse.json({ error: 'Invalid tier. Must be starter, pro, or enterprise.' }, { status: 400 });
@@ -37,6 +37,17 @@ export async function POST(request: NextRequest) {
   }
 
   const stripe = getStripe();
+
+  // Promo code support — one code per checkout (flash deal OR quiz reward, never both)
+  let promotionCode: string | undefined;
+  if (promoCode && typeof promoCode === 'string' && promoCode.length <= 40) {
+    const codes = await stripe.promotionCodes.list({ code: promoCode.trim().toUpperCase(), active: true, limit: 1 });
+    const code = codes.data[0];
+    if (!code) {
+      return NextResponse.json({ error: 'That promo code is not valid or has expired.' }, { status: 400 });
+    }
+    promotionCode = code.id;
+  }
 
   // Get or create Stripe customer
   const { data: profile } = await supabase
@@ -66,6 +77,8 @@ export async function POST(request: NextRequest) {
     customer: customerId,
     mode: 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],
+    ...(promotionCode ? { discounts: [{ promotion_code: promotionCode }] } : {}),
+    allow_promotion_codes: !promotionCode, // one discount max — no stacking
     success_url: `${appUrl}/dashboard?upgraded=true&tier=${tier}`,
     cancel_url: `${appUrl}/pricing?canceled=true`,
     metadata: {

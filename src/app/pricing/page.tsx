@@ -93,6 +93,7 @@ const plans: Plan[] = [
 export default function PricingPage() {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [loading, setLoading] = useState<string | null>(null);
+  const [promo, setPromo] = useState('');
 
   const handleUpgrade = async (tierId: string) => {
     if (tierId === 'free') return;
@@ -107,7 +108,7 @@ export default function PricingPage() {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: tierId }),
+        body: JSON.stringify({ tier: tierId, ...(promo.trim() ? { promoCode: promo.trim() } : {}) }),
       });
 
       const data = await res.json();
@@ -152,10 +153,27 @@ export default function PricingPage() {
           <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
             Simple, Transparent Pricing
           </h2>
-          <p className="text-white/60 max-w-xl mx-auto mb-8">
+          <p className="text-white/60 max-w-xl mx-auto mb-4">
             Start free. Upgrade when you're ready to own your apps.
             Every plan includes our AI agent team that builds your app from a single prompt.
           </p>
+
+          {/* Promo code + training quiz */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
+            <input
+              type="text"
+              value={promo}
+              onChange={(e) => setPromo(e.target.value)}
+              placeholder="Promo code (optional)"
+              className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-violet-500/50 uppercase"
+            />
+            <a
+              href="/training"
+              className="text-xs text-fuchsia-400 hover:text-fuchsia-300 transition underline underline-offset-2"
+            >
+              🏆 Take deployment training — pass the quiz, win $5–$10 off
+            </a>
+          </div>
 
           {/* Billing Toggle */}
           <div className="inline-flex items-center gap-3 bg-white/5 rounded-full p-1">
