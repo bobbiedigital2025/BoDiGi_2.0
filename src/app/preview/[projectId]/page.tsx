@@ -1,5 +1,6 @@
 import { getProjectAnywhere } from '@/lib/agents/pipeline';
 import { createClient } from '@supabase/supabase-js';
+import { DocsProtect } from '@/components/docs-protect';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,6 +97,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
 
   // Fetch project owner's tier for branding badge (free tier shows BoDiGi 2.0 branding)
   let projectTier: string = 'free';
+  let viewerEmail: string = '';
   try {
     const ownerId = (data as { userId?: string }).userId;
     if (ownerId) {
@@ -109,6 +111,14 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
         .eq('id', ownerId)
         .single();
       if (profile?.tier) projectTier = profile.tier;
+
+      // Viewer email for docs watermark (copy-protection: leaks are traceable)
+      const { data: viewerProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', ownerId)
+        .single();
+      if (viewerProfile?.email) viewerEmail = viewerProfile.email;
     }
   } catch {
     // Default to free (show branding) if tier lookup fails — safest for business
@@ -338,6 +348,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
 
         {/* ============ TAB: DOCS ============ */}
         <div id="tab-docs" className="tab-panel" style={{ display: 'none' }}>
+          <DocsProtect email={viewerEmail}>
           <section className="preview-section" style={{ maxWidth: '760px', paddingTop: '2rem', paddingBottom: '4rem' }}>
             {docsFiles.length > 0 ? (
               <>
@@ -398,6 +409,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
               </div>
             )}
           </section>
+          </DocsProtect>
         </div>{/* end tab-docs */}
 
         {/* ============ TAB: BUILD REPORT ============ */}
