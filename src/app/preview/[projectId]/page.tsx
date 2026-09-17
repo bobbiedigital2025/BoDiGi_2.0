@@ -1,6 +1,7 @@
 import { getProjectAnywhere } from '@/lib/agents/pipeline';
 import { createClient } from '@supabase/supabase-js';
 import { DocsProtect } from '@/components/docs-protect';
+import VercelDeployPanel from '@/components/vercel-deploy';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +98,8 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
 
   // Fetch project owner's tier for branding badge (free tier shows BoDiGi 2.0 branding)
   let projectTier: string = 'free';
+  let projectOwnerRole: string = 'user';
+  let vercelConnected: boolean = false;
   let viewerEmail: string = '';
   try {
     const ownerId = (data as { userId?: string }).userId;
@@ -107,18 +110,22 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
       );
       const { data: profile } = await supabase
         .from('profiles')
-        .select('tier')
+        .select('tier, role, email')
         .eq('id', ownerId)
         .single();
       if (profile?.tier) projectTier = profile.tier;
+      if (profile?.role) projectOwnerRole = profile.role;
+      if (profile?.email) viewerEmail = profile.email;
 
-      // Viewer email for docs watermark (copy-protection: leaks are traceable)
-      const { data: viewerProfile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', ownerId)
-        .single();
-      if (viewerProfile?.email) viewerEmail = viewerProfile.email;
+      // Vercel token present? (drives the deploy panel's initial state)
+      const { data: vKey } = await supabase
+        .from('user_api_keys')
+        .select('id')
+        .eq('user_id', ownerId)
+        .eq('provider', 'vercel')
+        .limit(1)
+        .maybeSingle();
+      vercelConnected = !!vKey;
     }
   } catch {
     // Default to free (show branding) if tier lookup fails — safest for business
@@ -343,6 +350,16 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             </div>
           </section>
         )}
+
+        {/* Real deployment to the user's own Vercel account (Pro perk) */}
+        <section className="preview-section">
+          <VercelDeployPanel
+            projectId={projectId}
+            tier={projectTier}
+            isAdmin={projectOwnerRole === 'admin'}
+            initiallyConnected={vercelConnected}
+          />
+        </section>
 
         </div>{/* end tab-app */}
 
