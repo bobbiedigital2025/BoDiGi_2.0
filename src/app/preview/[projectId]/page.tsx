@@ -2,6 +2,20 @@ import { getProjectAnywhere } from '@/lib/agents/pipeline';
 import { createClient } from '@supabase/supabase-js';
 import { DocsProtect } from '@/components/docs-protect';
 import VercelDeployPanel from '@/components/vercel-deploy';
+import ModifyPanel from '@/components/modify-panel';
+
+// Pull the bullet points out of REALITY_CHECK.md's Cons / Risks section
+// so the Modify panel can offer one-click "fix this weakness" prompts.
+function extractWeaknesses(markdown: string | undefined): string[] {
+  if (!markdown) return [];
+  const section = markdown.match(/##\s*(Cons|Risks|Biggest Risks)[\s\S]*?(?=\n##\s|$)/i);
+  if (!section) return [];
+  return section[0]
+    .split('\n')
+    .map((l) => l.replace(/^[-*•]\s+/, '').trim())
+    .filter((l) => l.length > 15 && !l.startsWith('#'))
+    .slice(0, 5);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -358,6 +372,16 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             tier={projectTier}
             isAdmin={projectOwnerRole === 'admin'}
             initiallyConnected={vercelConnected}
+          />
+        </section>
+
+        {/* Modification Pass — chat-to-edit, with one-click Reality Check fixes (Pro perk) */}
+        <section className="preview-section">
+          <ModifyPanel
+            projectId={projectId}
+            tier={projectTier}
+            isAdmin={projectOwnerRole === 'admin'}
+            weaknesses={extractWeaknesses(realityFile?.content)}
           />
         </section>
 
