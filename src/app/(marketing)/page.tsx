@@ -131,7 +131,8 @@ export default function LandingPage() {
           <p className="text-lg md:text-xl text-white/60 mb-10 max-w-2xl mx-auto">
             Describe your idea in one sentence. A team of AI agents builds your working app,
             writes your investor one-pager, and gives you an honest reality check — in minutes,
-            not months. No code required.
+            not months. Your code, your hosting, your keys:{' '}
+            <span className="text-white/90 font-medium">cancel anytime and keep everything.</span>
           </p>
 
           {/* Idea Input */}
