@@ -115,6 +115,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
   let projectOwnerRole: string = 'user';
   let vercelConnected: boolean = false;
   let viewerEmail: string = '';
+  let viewerIsAdmin: boolean = false;
   try {
     const ownerId = (data as { userId?: string }).userId;
     if (ownerId) {
@@ -130,6 +131,20 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
       if (profile?.tier) projectTier = profile.tier;
       if (profile?.role) projectOwnerRole = profile.role;
       if (profile?.email) viewerEmail = profile.email;
+
+      // The VIEWER may be an admin looking at someone else's project —
+      // admins unlock everything they can see (mirrors the API-side gate).
+      const { createServerClient } = await import('@/lib/supabase/server-client');
+      const authClient = await createServerClient();
+      const { data: { user: viewer } } = await authClient.auth.getUser();
+      if (viewer) {
+        const { data: vProfile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', viewer.id)
+          .single();
+        viewerIsAdmin = vProfile?.role === 'admin';
+      }
 
       // Vercel token present? (drives the deploy panel's initial state)
       const { data: vKey } = await supabase
@@ -241,6 +256,9 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             {state.name}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <a href="/dashboard" style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', padding: '0.375rem 0.75rem', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.5rem' }}>
+              ← Dashboard
+            </a>
             {state.status !== 'done' && (
               <span className="live-indicator">
                 <span className="live-dot"></span>
@@ -370,7 +388,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           <VercelDeployPanel
             projectId={projectId}
             tier={projectTier}
-            isAdmin={projectOwnerRole === 'admin'}
+            isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
             initiallyConnected={vercelConnected}
           />
         </section>
@@ -380,7 +398,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           <ModifyPanel
             projectId={projectId}
             tier={projectTier}
-            isAdmin={projectOwnerRole === 'admin'}
+            isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
             weaknesses={extractWeaknesses(realityFile?.content)}
           />
         </section>
