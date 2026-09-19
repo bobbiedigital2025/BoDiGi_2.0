@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/supabase/auth-context';
 import Link from 'next/link';
 
 function SignupForm() {
-  const { signUp, signInWithOAuth } = useAuth();
+  const { signUp } = useAuth();
   const router = useRouter();
 
   const [name, setName] = useState('');
@@ -44,13 +44,13 @@ function SignupForm() {
   };
 
   const handleOAuth = async (provider: 'google' | 'github') => {
+    // OAuth providers aren't enabled in Supabase yet — calling signInWithOAuth
+    // redirects the browser to Supabase's raw 400 JSON page before we can catch
+    // the error. Until providers are enabled, show the friendly message inline.
     setError(null);
-    const { error } = await signInWithOAuth(provider);
-    if (error) {
-      setError(
-        `${provider === 'google' ? 'Google' : 'GitHub'} sign-up isn't set up yet — email + password works right now. (We're enabling social login soon.)`
-      );
-    }
+    setError(
+      `${provider === 'google' ? 'Google' : 'GitHub'} sign-up is coming soon — for now, email + password works great.`
+    );
   };
 
   return (
