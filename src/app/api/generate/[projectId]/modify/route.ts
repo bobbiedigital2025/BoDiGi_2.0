@@ -18,6 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
+import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
@@ -48,7 +49,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   // 1. Tier gate — modifications are a Pro/Enterprise perk (admin bypasses)
-  const { data: profile } = await supabase
+  // Read the profile with the service role: the user is already authenticated
+  // above, and this avoids RLS/session flakiness silently reading a null row
+  // (which would downgrade a paying user to "free" and lock them out).
+  const adminRead = createAdminClient();
+  const { data: profile } = await adminRead
     .from('profiles')
     .select('tier, role')
     .eq('id', user.id)
@@ -57,8 +62,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const tier = profile?.tier || 'free';
   const isAdmin = profile?.role === 'admin';
   if (!isAdmin && !['pro', 'enterprise'].includes(tier)) {
+    // Loud + precise: tell them WHICH account is signed in, so multi-account
+    // users self-diagnose instead of thinking the feature is broken.
     return NextResponse.json(
-      { error: 'Modifications are a Pro feature. Upgrade to edit your app with AI.', upgrade: true },
+      {
+        error: `Modifications are a Pro feature — you're signed in as ${user.email || 'unknown'} (${tier}). Sign in with your Pro account or upgrade.`,
+        upgrade: true,
+      },
       { status: 403 }
     );
   }
@@ -218,7 +228,6 @@ Return the JSON with only the files that need to change.`;
     content: fileMap.get(e.path)!.content,
   }));
 
-  const { createAdminClient } = await import('@/lib/supabase/server');
   const admin = createAdminClient();
   await admin.from('project_logs').insert({
     project_id: projectId,
