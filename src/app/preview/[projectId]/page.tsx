@@ -1,6 +1,7 @@
 import { getProjectAnywhere } from '@/lib/agents/pipeline';
 import { createClient } from '@supabase/supabase-js';
 import { DocsProtect } from '@/components/docs-protect';
+import { DocsShelf } from '@/components/docs-shelf';
 import VercelDeployPanel from '@/components/vercel-deploy';
 import ModifyPanel from '@/components/modify-panel';
 
@@ -409,64 +410,11 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
         <div id="tab-docs" className="tab-panel" style={{ display: 'none' }}>
           <DocsProtect email={viewerEmail}>
           <section className="preview-section" style={{ maxWidth: '760px', paddingTop: '2rem', paddingBottom: '4rem' }}>
-            {docsFiles.length > 0 ? (
-              <>
-                {/* Document shelf — click to read */}
-                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
-                  {readmeFile && (
-                    <button className="doc-btn active" data-doc="readme" style={{ padding: '0.75rem 1.25rem', borderRadius: '0.75rem', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', color: '#c4b5fd', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
-                      📘 README
-                    </button>
-                  )}
-                  {pitchFile && (
-                    <button className="doc-btn" data-doc="pitch" style={{ padding: '0.75rem 1.25rem', borderRadius: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#999', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
-                      💼 Investor Pitch
-                    </button>
-                  )}
-                  {realityFile && (
-                    <button className="doc-btn" data-doc="reality" style={{ padding: '0.75rem 1.25rem', borderRadius: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#999', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
-                      🔍 Reality Check
-                    </button>
-                  )}
-                  {launchFile && (
-                    <button className="doc-btn" data-doc="launch" style={{ padding: '0.75rem 1.25rem', borderRadius: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#999', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
-                      🚀 Launch Guide
-                    </button>
-                  )}
-                  {marketingFile && (
-                    <button className="doc-btn" data-doc="marketing" style={{ padding: '0.75rem 1.25rem', borderRadius: '0.75rem', background: 'linear-gradient(135deg, rgba(124,58,237,0.15), rgba(192,38,211,0.15))', border: '1px solid rgba(192,38,211,0.4)', color: '#e879f9', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
-                      ✨ Marketing Kit <span style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.05em', background: 'linear-gradient(135deg, #7c3aed, #c026d3)', padding: '0.125rem 0.375rem', borderRadius: '0.25rem', color: '#fff', verticalAlign: 'middle', marginLeft: '0.25rem' }}>PRO</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Document panels */}
-                {readmeFile && <div id="doc-readme" className="doc-panel">{renderMarkdown(readmeFile.content)}</div>}
-                {pitchFile && <div id="doc-pitch" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(pitchFile.content)}</div>}
-                {realityFile && <div id="doc-reality" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(realityFile.content)}</div>}
-                {launchFile && <div id="doc-launch" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(launchFile.content)}</div>}
-                {marketingFile && <div id="doc-marketing" className="doc-panel" style={{ display: 'none' }}>{renderMarkdown(marketingFile.content)}</div>}
-                {legacyDocs.map((f, i) => (
-                  <div key={i}>{renderMarkdown(f.content)}</div>
-                ))}
-
-                {/* Download gate */}
-                <div style={{ marginTop: '2.5rem', padding: '1.25rem', borderRadius: '0.75rem', background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(192,38,211,0.1))', border: '1px solid rgba(168,85,247,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.9375rem' }}>🔒 Download locked</div>
-                    <div style={{ color: '#888', fontSize: '0.8125rem', marginTop: '0.25rem' }}>Read everything here. Upgrade to download these documents with your source code.</div>
-                  </div>
-                  <a href="/pricing" style={{ padding: '0.625rem 1.5rem', borderRadius: '0.5rem', background: 'linear-gradient(135deg, #7c3aed, #c026d3)', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
-                    Upgrade to Download
-                  </a>
-                </div>
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', color: '#555', padding: '4rem 0' }}>
-                <p style={{ fontSize: '1.125rem', marginBottom: '0.5rem' }}>Documentation not ready yet</p>
-                <p style={{ fontSize: '0.875rem' }}>The docs agent writes the README, Investor Pitch, and Reality Check at the end of the build.</p>
-              </div>
-            )}
+            <DocsShelf
+              docs={docsFiles.map((f) => ({ name: f.path, content: f.content }))}
+              canDownload={viewerIsAdmin || projectTier === 'starter' || projectTier === 'pro' || projectTier === 'enterprise'}
+              projectId={state.id}
+            />
           </section>
           </DocsProtect>
         </div>{/* end tab-docs */}
@@ -642,20 +590,6 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
               document.querySelectorAll('.tab-panel').forEach(function(p) { p.style.display = 'none'; });
               btn.classList.add('active');
               document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
-            });
-          });
-          document.querySelectorAll('.doc-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-              document.querySelectorAll('.doc-btn').forEach(function(b) {
-                b.style.background = 'rgba(255,255,255,0.03)';
-                b.style.borderColor = 'rgba(255,255,255,0.1)';
-                b.style.color = '#999';
-              });
-              document.querySelectorAll('.doc-panel').forEach(function(p) { p.style.display = 'none'; });
-              btn.style.background = 'rgba(168,85,247,0.1)';
-              btn.style.borderColor = 'rgba(168,85,247,0.3)';
-              btn.style.color = '#c4b5fd';
-              document.getElementById('doc-' + btn.dataset.doc).style.display = 'block';
             });
           });
           if (window.parent === window) {
