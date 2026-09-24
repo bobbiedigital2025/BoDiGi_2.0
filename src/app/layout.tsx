@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/supabase/auth-context";
 import { FlashSale } from "@/components/flash-sale";
 import { AppNav } from "@/components/app-nav";
+import { SupportChat } from "@/components/support-chat";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -154,6 +155,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <FlashSale />
           <AppNav />
           {children}
+          <SupportChat />
         </AuthProvider>
       </body>
     </html>

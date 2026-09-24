@@ -406,6 +406,7 @@ export function getProject(projectId: string) {
 
   return {
     state,
+    userId: project.userId || null,
     progress: project.orchestrator.getProgress(),
     agentActivity: project.orchestrator.getAgentActivity(),
     files: project.files,

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Users, FolderKanban, Activity, Shield, ArrowRight, LogOut } from 'lucide-react';
+import { Sparkles, Users, FolderKanban, Activity, Shield, ArrowRight, LogOut, LifeBuoy, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
 
@@ -27,6 +27,18 @@ interface AdminProject {
   user_email: string | null;
 }
 
+interface SupportTicket {
+  id: string;
+  user_email: string | null;
+  project_name: string | null;
+  subject: string;
+  body: string;
+  ai_summary: string | null;
+  status: string;
+  priority: string;
+  created_at: string;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
@@ -34,6 +46,9 @@ export default function AdminPage() {
   const [checkingAdmin, setCheckingAdmin] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<AdminProject[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [openTicket, setOpenTicket] = useState<string | null>(null);
+  const [userMenu, setUserMenu] = useState<string | null>(null);
   const [stats, setStats] = useState({ totalUsers: 0, totalProjects: 0, completedProjects: 0, activeProjects: 0 });
 
   // Check if user is admin
@@ -84,6 +99,36 @@ export default function AdminPage() {
         completedProjects: data.projects?.filter((p: AdminProject) => p.status === 'completed').length || 0,
         activeProjects: data.projects?.filter((p: AdminProject) => p.status !== 'completed').length || 0,
       });
+    }
+
+    // Load support tickets
+    const tRes = await fetch('/api/admin/support');
+    if (tRes.ok) {
+      const tData = await tRes.json();
+      setTickets(tData.tickets || []);
+    }
+  };
+
+  const updateTicket = async (id: string, patch: Record<string, string>) => {
+    const res = await fetch('/api/admin/support', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...patch }),
+    });
+    if (res.ok) {
+      setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } as SupportTicket : t)));
+    }
+  };
+
+  const updateUser = async (userId: string, patch: Record<string, string>) => {
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, ...patch }),
+    });
+    if (res.ok) {
+      setProfiles((prev) => prev.map((p) => (p.id === userId ? { ...p, ...patch } as Profile : p)));
+      setUserMenu(null);
     }
   };
 
@@ -189,6 +234,77 @@ export default function AdminPage() {
           </Card>
         </div>
 
+        {/* Support Inbox — tickets the AI chat escalated to humans */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LifeBuoy className="w-4 h-4" /> Support Inbox
+              {tickets.filter((t) => t.status === 'open').length > 0 && (
+                <Badge variant="error">{tickets.filter((t) => t.status === 'open').length} open</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {tickets.length === 0 ? (
+              <p className="text-white/40 text-sm">No support tickets. The AI chat is handling everything — nice.</p>
+            ) : (
+              <div className="space-y-2">
+                {tickets.map((t) => (
+                  <div key={t.id} className="rounded-lg border border-white/5">
+                    <button
+                      className="w-full flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg hover:bg-white/5 transition text-left"
+                      onClick={() => setOpenTicket(openTicket === t.id ? null : t.id)}
+                    >
+                      <span className="min-w-0">
+                        <span className="text-sm font-medium block truncate">{t.subject}</span>
+                        <span className="text-xs text-white/40">
+                          {t.user_email || 'unknown user'}
+                          {t.project_name ? ` · ${t.project_name}` : ''}
+                          {' · ' + new Date(t.created_at).toLocaleDateString()}
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <Badge variant={t.status === "open" ? "error" : t.status === "resolved" ? "success" : "info"}>{t.status}</Badge>
+                        <ChevronDown className={`w-3.5 h-3.5 text-white/40 transition-transform ${openTicket === t.id ? 'rotate-180' : ''}`} />
+                      </span>
+                    </button>
+
+                    {openTicket === t.id && (
+                      <div className="px-3 pb-3 space-y-3">
+                        <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-sm text-white/70 whitespace-pre-wrap max-h-64 overflow-y-auto">
+                          {t.body}
+                        </div>
+                        {t.ai_summary && (
+                          <div className="rounded-lg bg-violet-500/5 border border-violet-500/20 p-3 text-xs text-white/60">
+                            <span className="font-semibold text-violet-300">AI summary:</span> {t.ai_summary}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {t.status === 'open' && (
+                            <Button size="sm" variant="outline" onClick={() => updateTicket(t.id, { status: 'in_progress' })}>
+                              Start working
+                            </Button>
+                          )}
+                          {t.status !== 'resolved' && (
+                            <Button size="sm" variant="gradient" onClick={() => updateTicket(t.id, { status: 'resolved', resolutionNote: 'Resolved by admin.' })}>
+                              Mark resolved
+                            </Button>
+                          )}
+                          {t.status !== 'closed' && (
+                            <Button size="sm" variant="ghost" onClick={() => updateTicket(t.id, { status: 'closed' })}>
+                              Close
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Users Table */}
         <Card className="mb-8">
           <CardHeader>
@@ -213,9 +329,45 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={p.role === 'admin' ? 'success' : 'info'}>
-                        {p.role}
-                      </Badge>
+                      <div className="relative">
+                        <button
+                          className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/10 hover:border-white/25 transition text-xs"
+                          onClick={() => setUserMenu(userMenu === p.id ? null : p.id)}
+                        >
+                          <Badge variant={p.role === 'admin' ? 'success' : 'info'}>{p.role}</Badge>
+                          {(p as Profile & { tier?: string }).tier && (
+                            <Badge variant="info">{(p as Profile & { tier?: string }).tier}</Badge>
+                          )}
+                          <ChevronDown className="w-3 h-3 text-white/40" />
+                        </button>
+                        {userMenu === p.id && (
+                          <div className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-white/10 bg-slate-950 shadow-2xl z-10 py-1">
+                            <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-white/30">Set tier</div>
+                            {['free', 'starter', 'pro', 'enterprise'].map((tier) => (
+                              <button
+                                key={tier}
+                                className="w-full text-left px-3 py-1.5 text-sm text-white/70 hover:text-white hover:bg-white/5"
+                                onClick={() => updateUser(p.id, { tier })}
+                              >
+                                {tier}
+                              </button>
+                            ))}
+                            <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-white/30 border-t border-white/10 mt-1">Set role</div>
+                            <button
+                              className="w-full text-left px-3 py-1.5 text-sm text-white/70 hover:text-white hover:bg-white/5"
+                              onClick={() => updateUser(p.id, { role: 'admin' })}
+                            >
+                              Make admin
+                            </button>
+                            <button
+                              className="w-full text-left px-3 py-1.5 text-sm text-white/70 hover:text-white hover:bg-white/5"
+                              onClick={() => updateUser(p.id, { role: 'user' })}
+                            >
+                              Revoke admin
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <span className="text-xs text-white/30">
                         {new Date(p.created_at).toLocaleDateString()}
                       </span>

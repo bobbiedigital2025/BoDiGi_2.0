@@ -81,7 +81,7 @@ The kit must include these sections, written about THIS specific app — not gen
 
 1. BRAND VOICE — the one-line positioning statement, 3-word brand personality, tagline options (3), and a "we sound like / we never sound like" pair.
 
-2. LANDING PAGE COPY — hero headline (under 10 words), subheadline, 3 benefit bullets written as outcomes not features, social proof line, and primary CTA button text.
+2. LANDING PAGE COPY — hero headline (under 10 words), subheadline, 3 benefit bullets written as outcomes not features, social proof line, and primary CTA button text. Pick the persuasion angle that actually fits THIS audience (e.g. time-scarce small business owners → "done for you"; budget-conscious indie hackers → "free to start"; enterprise buyers → security and control) and say which angle you chose and why in one line.
 
 3. LAUNCH POSTS — a Product Hunt launch post (title + tagline + first comment telling the maker story), a Hacker News post (no marketing speak, honest and technical), and a Reddit post for the most relevant subreddit (following that community's norms, leading with the problem not the product).
 
@@ -93,7 +93,9 @@ The kit must include these sections, written about THIS specific app — not gen
 
 7. FIRST 30 DAYS PLAN — a week-by-week marketing calendar with specific actions, channels, and one measurable goal per week. Realistic for a solo founder with no marketing budget.
 
-Rules: use real numbers where possible, name actual platforms and communities, write copy a founder could paste directly into a website or social post with zero editing, and keep every piece honest — no hype words like "revolutionary" or "game-changing".`;
+8. WHAT'S WORKING RIGHT NOW — a short trend brief for THIS app's category and audience: 2-3 distribution tactics that are currently over-performing for apps like this one (name the specific platforms, communities, and content formats — e.g. which subreddits, which TikTok/Reels hook styles, which newsletter placements), one tactic that is saturated and worth avoiding, and the single highest-leverage channel for this exact audience. Be concrete and current — no "post consistently on social media" filler.
+
+Rules: every section must be specific to THIS app and THIS audience — if a line could be pasted into any other app's kit, rewrite it. Use real numbers where possible, name actual platforms and communities, write copy a founder could paste directly into a website or social post with zero editing, and keep every piece honest — no hype words like "revolutionary" or "game-changing".`;
 
 /**
  * Parse the docs agent's three-document response.

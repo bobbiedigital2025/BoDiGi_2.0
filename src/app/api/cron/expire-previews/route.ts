@@ -48,15 +48,16 @@ export async function GET(request: NextRequest) {
 
     for (const project of noExpiry || []) {
       // Set expiry based on owner's tier: free = 7 days, starter = 30 days,
-      // pro/enterprise = never (no expiry set)
+      // pro/enterprise/admin = never (no expiry set). Admins get full free
+      // access to everything the app offers — previews never expire.
       const { data: profile } = await supabase
         .from('profiles')
-        .select('tier')
+        .select('tier, role')
         .eq('id', project.user_id)
         .single();
 
       const tier = profile?.tier || 'free';
-      if (tier === 'pro' || tier === 'enterprise') continue;
+      if (tier === 'pro' || tier === 'enterprise' || profile?.role === 'admin') continue;
 
       const days = tier === 'starter' ? 30 : 7;
       const createdAt = new Date(project.created_at);
@@ -124,12 +125,12 @@ export async function GET(request: NextRequest) {
       // Warning emails for free AND starter tier (both have expiring previews)
       const { data: profile } = await supabase
         .from('profiles')
-        .select('tier, email')
+        .select('tier, role, email')
         .eq('id', project.user_id)
         .single();
 
       const tier = profile?.tier || 'free';
-      if (tier === 'pro' || tier === 'enterprise') continue;
+      if (tier === 'pro' || tier === 'enterprise' || profile?.role === 'admin') continue;
       if (!profile?.email) continue;
 
       const { sent } = await sendExpiryWarningEmail(
@@ -153,15 +154,15 @@ export async function GET(request: NextRequest) {
     if (expireError) throw expireError;
 
     for (const project of expiredProjects || []) {
-      // Pro/Enterprise upgraded — previews never expire, clear flags
+      // Pro/Enterprise/admin — previews never expire, clear flags
       const { data: profile } = await supabase
         .from('profiles')
-        .select('tier')
+        .select('tier, role')
         .eq('id', project.user_id)
         .single();
 
       const tier = profile?.tier || 'free';
-      if (tier === 'pro' || tier === 'enterprise') {
+      if (tier === 'pro' || tier === 'enterprise' || profile?.role === 'admin') {
         // User upgraded — clear preview flags instead
         await supabase
           .from('projects')

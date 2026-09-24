@@ -158,11 +158,13 @@ export function DocsShelf({ docs, canDownload, projectId }: { docs: DocFile[]; c
       {/* Download gate */}
       <div style={{ marginTop: '2.5rem', padding: '1.25rem', borderRadius: '0.75rem', background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(192,38,211,0.1))', border: '1px solid rgba(168,85,247,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.9375rem' }}>🔒 Download locked</div>
-          <div style={{ color: '#888', fontSize: '0.8125rem', marginTop: '0.25rem' }}>Read everything here. Upgrade to download these documents with your source code.</div>
+          <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.9375rem' }}>{canDownload ? '✅ Download included' : '🔒 Download locked'}</div>
+          <div style={{ color: '#888', fontSize: '0.8125rem', marginTop: '0.25rem' }}>
+            {canDownload ? 'Grab the full ZIP — docs plus your complete source code.' : 'Read everything here. Upgrade to download these documents with your source code.'}
+          </div>
         </div>
         {canDownload ? (
-          <a href={`/api/download?projectId=${projectId}`} style={{ padding: '0.625rem 1.5rem', borderRadius: '0.5rem', background: 'linear-gradient(135deg, #7c3aed, #c026d3)', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
+          <a href={`/api/generate/${projectId}/download`} style={{ padding: '0.625rem 1.5rem', borderRadius: '0.5rem', background: 'linear-gradient(135deg, #7c3aed, #c026d3)', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
             Download ZIP
           </a>
         ) : (

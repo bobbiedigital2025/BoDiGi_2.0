@@ -385,7 +385,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
         )}
 
         {/* Real deployment to the user's own Vercel account (Pro perk) */}
-        <section className="preview-section">
+        <section className="preview-section" id="deploy">
           <VercelDeployPanel
             projectId={projectId}
             tier={projectTier}
@@ -395,7 +395,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
         </section>
 
         {/* Modification Pass — chat-to-edit, with one-click Reality Check fixes (Pro perk) */}
-        <section className="preview-section">
+        <section className="preview-section" id="modify">
           <ModifyPanel
             projectId={projectId}
             tier={projectTier}
@@ -592,6 +592,16 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
               document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
             });
           });
+          // Hash deep links from the nav dropdown: #docs, #deploy, #marketing, #modify
+          // (#marketing and #deploy/#modify live in the App tab; #docs opens the Docs tab)
+          function activateTab(name) {
+            var target = document.querySelector('.tab-btn[data-tab="' + name + '"]');
+            if (target) target.click();
+          }
+          var hash = window.location.hash.replace('#', '');
+          if (hash === 'docs' || hash === 'build' || hash === 'app' || hash === 'marketing') {
+            activateTab(hash === 'marketing' ? 'docs' : hash);
+          }
           if (window.parent === window) {
             // Standalone mode — auto-refresh every 3s while building
             setInterval(() => { window.location.reload(); }, 3000);
