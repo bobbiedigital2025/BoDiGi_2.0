@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   user_email TEXT,
-  project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+  project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
   project_name TEXT,
   subject TEXT NOT NULL,
   body TEXT NOT NULL,
