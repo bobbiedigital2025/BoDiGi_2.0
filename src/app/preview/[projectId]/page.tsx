@@ -1,4 +1,5 @@
 import { getProjectAnywhere } from '@/lib/agents/pipeline';
+import { PreviewTabs } from '@/components/preview-tabs';
 import { createClient } from '@supabase/supabase-js';
 import { DocsProtect } from '@/components/docs-protect';
 import { DocsShelf } from '@/components/docs-shelf';
@@ -289,16 +290,11 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           </div>
         </div>
 
-        {/* View Tabs: App (default) | Docs | Build */}
-        <div className="tab-bar">
-          <button className="tab tab-btn active" data-tab="app">App</button>
-          <button className="tab tab-btn" data-tab="docs">Docs</button>
-          <button className="tab tab-btn" data-tab="build">Build Report</button>
-        </div>
+        {/* View Tabs: App (default) | Docs | Build — React state, not raw script */}
+        <PreviewTabs
+          app={<>
 
         {/* ============ TAB: THE APP ============ */}
-        <div id="tab-app" className="tab-panel">
-
         {/* Hero */}
         <section className="preview-hero">
           <h1>{state.name}</h1>
@@ -404,10 +400,8 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           />
         </section>
 
-        </div>{/* end tab-app */}
-
-        {/* ============ TAB: DOCS ============ */}
-        <div id="tab-docs" className="tab-panel" style={{ display: 'none' }}>
+        </>}
+          docs={<>
           <DocsProtect email={viewerEmail}>
           <section className="preview-section" style={{ maxWidth: '760px', paddingTop: '2rem', paddingBottom: '4rem' }}>
             <DocsShelf
@@ -417,10 +411,8 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             />
           </section>
           </DocsProtect>
-        </div>{/* end tab-docs */}
-
-        {/* ============ TAB: BUILD REPORT ============ */}
-        <div id="tab-build" className="tab-panel" style={{ display: 'none' }}>
+        </>}
+          build={<>
 
         {/* Tech Stack */}
         {specs && Object.keys(specs.techStack).length > 0 && (
@@ -568,7 +560,8 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           </section>
         )}
 
-        </div>{/* end tab-build */}
+        </>}
+        />
 
         <footer className="preview-footer">
           {/* BoDiGi 2.0 branding — shown on free-tier previews, removed for paid tiers */}
@@ -582,31 +575,15 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           <p style={{ marginTop: '0.25rem' }}>Project ID: {state.id} · {files.length} files · {data.progress}% complete</p>
         </footer>
 
-        {/* Tab switching + doc switching + auto-refresh script */}
-        <script dangerouslySetInnerHTML={{ __html: `
-          document.querySelectorAll('.tab-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-              document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
-              document.querySelectorAll('.tab-panel').forEach(function(p) { p.style.display = 'none'; });
-              btn.classList.add('active');
-              document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
-            });
-          });
-          // Hash deep links from the nav dropdown: #docs, #deploy, #marketing, #modify
-          // (#marketing and #deploy/#modify live in the App tab; #docs opens the Docs tab)
-          function activateTab(name) {
-            var target = document.querySelector('.tab-btn[data-tab="' + name + '"]');
-            if (target) target.click();
-          }
-          var hash = window.location.hash.replace('#', '');
-          if (hash === 'docs' || hash === 'build' || hash === 'app' || hash === 'marketing') {
-            activateTab(hash === 'marketing' ? 'docs' : hash);
-          }
-          if (window.parent === window) {
-            // Standalone mode — auto-refresh every 3s while building
-            setInterval(() => { window.location.reload(); }, 3000);
-          }
-        `}} />
+        {/* Auto-refresh ONLY while the build is still running — reloads preserve
+            the current tab via the hash so it doesn't yank the reader back. */}
+        {state.status !== 'done' && (
+          <script dangerouslySetInnerHTML={{ __html: `
+            if (window.parent === window) {
+              setInterval(function() { window.location.reload(); }, 3000);
+            }
+          `}} />
+        )}
       </body>
     </html>
   );

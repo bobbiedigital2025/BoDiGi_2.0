@@ -17,6 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
@@ -270,6 +271,9 @@ Return the JSON with only the files that need to change.`;
     level: 'info',
     message: `MOD-APPLIED: ${validEdits.map((e) => e.summary || e.path).join(' | ').slice(0, 500)}`,
   });
+
+  // Bust the cached preview render so the edit shows on next load
+  revalidatePath(`/preview/${projectId}`);
 
   return NextResponse.json({
     success: true,
