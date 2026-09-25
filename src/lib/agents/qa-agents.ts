@@ -324,23 +324,56 @@ Seeking early users and feedback to validate product-market fit.
 }
 
 function generateDefaultRealityCheck(state: ProjectState): string {
+  const specs = state.specs;
+  const features = specs?.features || [];
+  const criticalFeatures = features.filter(f => f.priority === 'critical').map(f => f.name);
+  const audience = specs?.targetAudience || 'your target users';
+  const monetization = specs?.monetization || 'freemium';
+  const marketplace = specs?.marketplace || 'web';
+  const complianceNeeds = specs?.compliance || [];
+
+  const pros: string[] = [];
+  pros.push(`**Clear audience.** ${audience} — specific enough to market to directly, broad enough to sustain a business.`);
+  if (criticalFeatures.length <= 3) pros.push(`**Focused scope.** ${criticalFeatures.length} critical feature${criticalFeatures.length !== 1 ? 's' : ''} — buildable in days, not months.`);
+  if (monetization.includes('freemium') || monetization.includes('free')) pros.push(`**Low-friction entry.** Free tier lets users try before they pay — reduces the biggest barrier for new tools.`);
+  pros.push(`**Low cost to test.** Built with AI agents for a fraction of the typical $10-25K agency quote — you can afford to validate before investing heavily.`);
+  if (marketplace === 'web') pros.push(`**Web-first distribution.** No app store review delays — you can ship updates daily and reach users immediately.`);
+
+  const cons: string[] = [];
+  cons.push(`**Unvalidated demand.** The single biggest risk — nobody has paid for this yet. Talking to potential users is not optional.`);
+  cons.push(`**Crowded market.** Most software categories have 5-20 competitors. Your advantage has to be specific: ${specs?.summary ? 'your angle on the problem' : 'a unique approach'}, not "better UI."`);
+  if (features.some(f => f.complexity === 'complex')) cons.push(`**Technical complexity.** Some features are complex — expect edge cases the AI build doesn't cover. Budget time for manual testing and iteration.`);
+  cons.push(`**Distribution is the real work.** The build is the easy 20%. Getting ${audience} to find, trust, and pay for this is the hard 80%.`);
+  if (complianceNeeds.length > 2) cons.push(`**Regulatory overhead.** ${complianceNeeds.join(', ')} — each adds legal and engineering cost.`);
+
   return `# Reality Check: ${state.name}
 
-## Pros
-- Clear target audience: ${state.specs?.targetAudience || 'defined users'}
-- Focused feature set — avoids scope creep
-- Low cost to build and test
+*An honest viability analysis. This document exists to tell you the truth, not to make you feel good. Every idea has real risks — the ones that succeed are the ones where the founder knew the risks and planned around them.*
 
-## Cons
-- Unvalidated demand — the biggest risk for any new product
-- Competition from established generic tools
-- Requires consistent marketing effort post-launch
+## Strengths
 
-## Validate First
-Whether ${state.specs?.targetAudience || 'target users'} will actually pay. Talk to 10 potential users before investing further.
+${pros.map((p, i) => `${i + 1}. ${p}`).join('\n\n')}
+
+## Weaknesses & Risks
+
+${cons.map((c, i) => `${i + 1}. ${c}`).join('\n\n')}
+
+## What to Validate First
+
+Before spending money on marketing or more features: **will ${audience} actually pay for this?**
+
+Concrete steps:
+1. Find 10 people who match the target audience (online communities, local meetups, LinkedIn)
+2. Show them the app — don't pitch it, just watch them use it
+3. Ask: "Would you pay $X/month for this?" If fewer than 3 say yes, rethink the pricing or the audience
+
+## Single Biggest Risk
+
+**Nobody finds it.** Great products die from invisibility more often than from bugs. Your launch plan matters more than your feature list.
 
 ## Difficulty Rating
-**Moderate** — the build is the easy part; distribution is the challenge.
+
+**${features.some(f => f.complexity === 'complex') ? 'Hard' : 'Moderate'}** — ${features.some(f => f.complexity === 'complex') ? 'the build has real technical complexity, and distribution is never easy' : 'the build is straightforward, but distribution is the real challenge'}.
 `;
 }
 
@@ -406,43 +439,120 @@ You did it. ${state.name} is a real business on the internet.
 }
 
 function generateDefaultMarketingKit(state: ProjectState): string {
-  const audience = state.specs?.targetAudience || 'your target users';
-  const features = (state.specs?.features || []).slice(0, 3).map(f => f.name).join(', ');
+  const specs = state.specs;
+  const audience = specs?.targetAudience || 'your target users';
+  const features = specs?.features || [];
+  const topFeatures = features.filter(f => f.priority === 'critical').slice(0, 3);
+  const featureNames = topFeatures.map(f => f.name).join(', ');
+  const summary = specs?.summary || state.idea;
+  const monetization = specs?.monetization || 'freemium';
+
+  // Derive benefit-oriented bullets from features
+  const benefitBullets = topFeatures.map(f => {
+    const desc = f.description || f.name;
+    return `- **${f.name}:** ${desc}`;
+  }).join('\n');
+
   return `# Launch Marketing Kit: ${state.name}
 
-## Brand Voice
-**Positioning:** ${state.name} — ${state.specs?.summary || state.idea}
-**Personality:** Practical, honest, fast
-**Taglines:** Built for ${audience}. / From idea to live in days, not months. / The business builder.
+## 1. Brand Voice
 
-## Landing Page Copy
-**Hero:** ${state.name} — ${state.specs?.summary || state.idea}
-**Bullets:** ${features}
-**CTA:** Build your app now
+**Positioning statement:** ${state.name} — ${summary}
 
-## Launch Posts
-**Product Hunt:** ${state.name} — ${state.specs?.summary || state.idea}. Built with AI agents in days instead of a $10K agency build.
-**Hacker News:** Show HN: I built ${state.name} with an AI agent pipeline — share your build story.
-**Reddit:** Post in the subreddit where ${audience} hang out. Lead with the problem you solve, not the product.
+**Three-word personality:** Practical. Specific. Honest.
 
-## Social Content
-- Launch day: "${state.name} is live. ${state.specs?.summary || state.idea}."
-- Problem post: "How much did your last app build cost? We built ${state.name} for the price of a subscription."
-- Behind the scenes: "Watched AI agents write, test, and deploy ${state.name} — here's how it works."
+**Tagline options:**
+1. "${topFeatures[0]?.name || 'Built'} for ${audience}."
+2. "${summary.split('.')[0]}."
+3. "Stop duct-taping. Start shipping."
 
-## Email Sequences
-**Waitlist:** (1) You're on the list — here's what's coming. (2) The problem ${state.name} solves. (3) We're live — your invite is inside.
-**Onboarding:** (1) Welcome — your first build. (2) Your quick win. (3) Feature spotlight. (4) What others built. (5) Ready for more?
+**We sound like:** A smart friend who explains things clearly and doesn't oversell.
+**We never sound like:** A hype machine. No "revolutionary," no "game-changing," no "disrupt."
 
-## Press Kit
-**Boilerplate:** ${state.name} is a ${state.specs?.monetization || 'subscription'} app built for ${audience}, delivering ${features}.
-**Angles:** (1) AI agents replacing agency builds. (2) Non-technical founders shipping real software. (3) The cost collapse: $25K → $19/month.
+## 2. Landing Page Copy
 
-## First 30 Days
-**Week 1:** Launch on Product Hunt + share build story. Goal: 100 visitors.
-**Week 2:** Post in 3 communities where ${audience} gather. Goal: 10 signups.
-**Week 3:** Email your waitlist weekly wins. Goal: first user build.
-**Week 4:** Collect testimonials, iterate on feedback. Goal: 5 active users.
+**Hero headline:** ${summary.split('.')[0]}
+
+**Subheadline:** ${state.name} handles ${featureNames || 'the hard parts'} so you can focus on what matters.
+
+**Benefit bullets:**
+${benefitBullets || '- Built for speed and simplicity\n- No learning curve\n- Works where you work'}
+
+**CTA:** Start Free
+
+## 3. Launch Posts
+
+**Product Hunt:**
+Title: ${state.name} — ${summary.split('.')[0]}
+Tagline: ${topFeatures[0]?.name || 'Solves a real problem'} for ${audience}
+First comment: "I built ${state.name} because I kept running into the same problem: ${state.idea.split('.')[0]}. Existing tools were either too expensive, too complicated, or missing the one thing I actually needed. So I built it. Happy to answer questions — especially if you're in the ${audience.split(' ')[0]} space."
+
+**Hacker News:**
+Show HN: ${state.name} — ${summary.split('.')[0]}
+Keep it factual: what it does, what stack it uses (${Object.values(specs?.techStack || {}).slice(0, 3).join(', ')}), what's interesting about the approach.
+
+**Reddit:**
+Find the subreddit where ${audience} actually gather. Lead with the problem: "How do you currently handle [the problem ${state.name} solves]?" Share your experience, mention what you built only if asked.
+
+## 4. Social Content
+
+**Tweet 1 (launch):** "${state.name} is live. ${summary.split('.')[0]}. Free to start."
+
+**Tweet 2 (problem):** "The average ${audience.split(' ')[0]} spends hours on something that should take minutes. ${state.name} fixes that."
+
+**Tweet 3 (build story):** "How ${state.name} went from idea to live product. Thread below."
+
+**LinkedIn:** Tell the story: the problem you hit, what you tried, why nothing worked, and why you built ${state.name}. End with what you learned, not a sales pitch.
+
+**Instagram/TikTok hooks:**
+1. "Nobody talks about how hard it is to [problem]. Here's what I built about it."
+2. "POV: You just discovered ${state.name} and saved yourself 10 hours this week."
+3. "I built this because I was tired of [pain point]."
+
+## 5. Email Sequences
+
+**Pre-launch (3 emails):**
+1. Subject: "Something I've been working on" — tease the problem, hint at the solution
+2. Subject: "The ${audience.split(' ')[0]} problem nobody talks about" — describe the pain in detail
+3. Subject: "${state.name} is live" — direct link, one CTA, no fluff
+
+**Onboarding (5 emails):**
+1. Subject: "Welcome to ${state.name}" — quick-start guide
+2. Subject: "Your first ${topFeatures[0]?.name || 'win'}" — walk through the first key action
+3. Subject: "Did you know about this?" — feature spotlight on the most-loved feature
+4. Subject: "How others use ${state.name}" — social proof, use cases
+5. Subject: "Ready for more?" — upgrade path or referral ask
+
+## 6. Press Kit
+
+**Boilerplate (100 words):**
+${state.name} is a ${monetization} application built for ${audience}. It solves ${state.idea.split('.')[0].toLowerCase()} by providing ${featureNames || 'a focused, purpose-built tool'}. Founded in 2026, ${state.name} is designed to be simple, fast, and honest — no bloat, no hidden fees, no lock-in.
+
+**Press angles:**
+1. The solo founder who shipped a real product without a dev team
+2. The specific problem: why existing tools fail ${audience}
+3. The build-in-public story: from idea to launch with AI agents
+
+## 7. First 30 Days
+
+**Week 1 — Launch.** Post on Product Hunt + share on social. Tell everyone you know personally. Goal: 100 visitors, 5 signups.
+
+**Week 2 — Community.** Find 3 online communities where ${audience} gather. Be helpful first, mention the product second. Goal: 10 signups, 1 piece of feedback that changes something.
+
+**Week 3 — Content.** Write one honest post about the problem you solve (blog, LinkedIn, or Medium). Share the build story. Goal: 1 post that gets shared.
+
+**Week 4 — Iterate.** Talk to every user who signed up. Fix the #1 complaint. Ship the improvement. Goal: 5 active users, 1 improvement shipped.
+
+## 8. What's Working Right Now
+
+For ${audience} specifically:
+- **Short-form video** (TikTok, Reels) showing the problem → solution transformation. Hook in the first 2 seconds with the pain, not the product.
+- **Community-first distribution** — being genuinely helpful in 2-3 niche communities before ever mentioning your product. ${audience} can smell a sales pitch from a mile away.
+- **Build-in-public** on X/Twitter — share the process, the failures, the numbers. People root for builders, not brands.
+
+Avoid: paid ads before you have 10+ organic signups. You don't know what message works yet — paid traffic just wastes money on the wrong message.
+
+Highest-leverage channel: the specific online community where ${audience} already asks for help with this problem. Be there.
 `;
 }
 

@@ -1,12 +1,13 @@
 /**
  * API Route: POST /api/setup-agent
  * AI-powered Setup Agent that guides users through API key configuration.
- * Uses the existing Telnyx pipeline for intelligent, conversational assistance.
+ * Uses the shared ai-client (OpenRouter preferred, Telnyx fallback).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
+import { callAI, hasAIKey } from '@/lib/agents/ai-client';
 
 const SETUP_AGENT_SYSTEM_PROMPT = `You are the BoDiGi 2.0 Setup Agent — a friendly, patient AI assistant who helps users through every step after their app is generated: API key setup, deployment troubleshooting, AND post-deployment customization.
 
@@ -81,42 +82,18 @@ interface ChatMessage {
   content: string;
 }
 
-async function callTelnyx(messages: ChatMessage[], systemPrompt: string) {
-  const apiKey = process.env.TELNYX_API_KEY;
-  if (!apiKey) {
-    return { content: 'Setup Agent is not configured yet. Please add TELNYX_API_KEY to your environment variables.', error: true };
+async function callSetupAI(messages: ChatMessage[], systemPrompt: string) {
+  if (!hasAIKey()) {
+    return { content: 'Setup Agent is not configured yet. Please add OPENROUTER_API_KEY to your environment variables.', error: true };
   }
 
   try {
-    const response = await fetch('https://api.telnyx.com/v2/ai/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.AI_MODEL || 'MiniMaxAI/MiniMax-M3-MXFP8',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages,
-        ],
-        max_tokens: 1024,
-        temperature: 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Telnyx API error:', error);
-      return { content: 'I\'m having trouble connecting to my AI brain right now. Please try again in a moment, or check the Setup Guide at /setup for manual instructions.', error: true };
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || 'I\'m not sure how to respond to that. Can you tell me more about what you need help with?';
+    const userContent = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+    const content = await callAI(systemPrompt, userContent);
     return { content, error: false };
   } catch (err) {
-    console.error('Setup Agent error:', err);
-    return { content: 'Something went wrong on my end. Please try again, or check the Setup Guide at /setup for manual instructions.', error: true };
+    console.error('Setup Agent AI error:', err);
+    return { content: 'I\'m having trouble connecting to my AI brain right now. Please try again in a moment, or check the Setup Guide at /setup for manual instructions.', error: true };
   }
 }
 
@@ -177,7 +154,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const result = await callTelnyx(sanitizedMessages, contextPrompt);
+  const result = await callSetupAI(sanitizedMessages, contextPrompt);
 
   return NextResponse.json({
     message: result.content,

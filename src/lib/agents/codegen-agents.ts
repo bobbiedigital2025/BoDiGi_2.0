@@ -25,124 +25,107 @@ export interface DatabaseAgentOutput {
   files: GeneratedFile[];
 }
 
-export const DATABASE_AGENT_SYSTEM_PROMPT = `You are a senior database engineer. Given an architecture document, generate production-ready PostgreSQL (Supabase-compatible) SQL.
+export const DATABASE_AGENT_SYSTEM_PROMPT = `You are a senior database architect with deep expertise in PostgreSQL and Supabase. You design schemas that are secure by default, performant at scale, and perfectly matched to the application's actual data needs.
 
-Generate 2 files only: schema.sql (CREATE TABLEs, constraints, indexes, RLS policies) and seed.sql (demo data).
-Keep SQL compact — no comments between statements, minimal whitespace.
+RULES:
+- Generate schema.sql with: CREATE TABLE statements with proper constraints (NOT NULL, CHECK, UNIQUE), primary/foreign keys with ON DELETE behavior, indexes on columns used in WHERE/JOIN/ORDER BY, Row Level Security policies on every table (users can only read/write their own data, admins can read all), and updated_at triggers.
+- Generate seed.sql with realistic demo data that matches the app's domain — not "test user 1" but plausible names, emails, and content that would make a demo look real.
+- Table names must come from the architecture's data models. Field types must match the architecture spec exactly.
+- Add composite indexes for common query patterns (e.g. user_id + status, user_id + created_at).
+- Include a comments column/table only if the app actually needs it — don't pad the schema.
+- Use UUID primary keys with uuid_generate_v4() or gen_random_uuid().
+- Keep SQL compact — no comments between statements, minimal whitespace.
+
 Respond ONLY in valid JSON: {"files":[{"path":"db/schema.sql","content":"...","agent":"database","status":"generated"},{"path":"db/seed.sql","content":"...","agent":"database","status":"generated"}]}`;
 
 export function generateDefaultDatabaseFiles(input: DatabaseAgentInput): DatabaseAgentOutput {
-  // Architecture data models inform the schema (used when AI is wired in)
+  // Build schema from the architecture's actual data models, not hardcoded tables
+  const models = input.architecture?.dataModels || [];
+  const appName = (input.specs?.summary || 'App').split('.')[0].slice(0, 50);
 
-  const schemaSQL = `-- AppForge Generated Schema
--- Auto-generated from architecture specification
+  const tables: string[] = [];
+  const idx: string[] = [];
+  const rls: string[] = [];
+  const seeds: string[] = [];
 
--- Enable extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Users table
-CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  // Core users table
+  tables.push(`CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
   name TEXT,
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+);`);
+  rls.push(`ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users read own profile" ON users FOR SELECT USING (auth.uid() = id);`);
 
--- Projects table
-CREATE TABLE IF NOT EXISTS projects (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  description TEXT,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Tasks table
-CREATE TABLE IF NOT EXISTS tasks (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  description TEXT,
-  status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
-  priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
-  due_date DATE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Subscriptions table
-CREATE TABLE IF NOT EXISTS subscriptions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  stripe_customer_id TEXT NOT NULL,
-  stripe_subscription_id TEXT,
-  plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'enterprise')),
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'canceled', 'past_due')),
-  current_period_end TIMESTAMPTZ,
+  // Generate tables from the architecture's data models
+  for (const m of models) {
+    if (m.name === 'users') continue;
+    const cols = m.fields.filter(f => f.name !== 'id').map(f => {
+      let t = 'TEXT';
+      if (f.type === 'uuid') t = 'UUID';
+      else if (['integer', 'int', 'number'].includes(f.type)) t = 'INTEGER';
+      else if (['float', 'decimal', 'numeric'].includes(f.type)) t = 'NUMERIC';
+      else if (f.type === 'boolean') t = 'BOOLEAN DEFAULT false';
+      else if (['timestamp', 'datetime', 'timestamptz'].includes(f.type)) t = 'TIMESTAMPTZ DEFAULT NOW()';
+      else if (f.type === 'date') t = 'DATE';
+      else if (['json', 'jsonb'].includes(f.type)) t = 'JSONB';
+      else if (f.type.startsWith('enum')) {
+        const vals = f.type.match(/\(([^)]+)\)/)?.[1] || '';
+        t = `TEXT CHECK (${f.name} IN (${vals.split(',').map(v => `'${v.trim()}'`).join(',')}))`;
+      }
+      const req = f.required ? ' NOT NULL' : '';
+      const ref = f.references ? ` REFERENCES ${f.references}` : '';
+      return `  ${f.name} ${t}${req}${ref}`;
+    });
+    tables.push(`CREATE TABLE IF NOT EXISTS ${m.name} (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+${cols.join(',\n')},
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+);`);
+    const hasUserId = m.fields.some(f => f.name === 'user_id');
+    if (hasUserId) {
+      idx.push(`CREATE INDEX IF NOT EXISTS idx_${m.name}_user_id ON ${m.name}(user_id);`);
+      rls.push(`ALTER TABLE ${m.name} ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own ${m.name}" ON ${m.name} FOR ALL USING (auth.uid() = user_id);`);
+    } else {
+      rls.push(`ALTER TABLE ${m.name} ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated read ${m.name}" ON ${m.name} FOR SELECT USING (auth.role() = 'authenticated');`);
+    }
+    // Seed with plausible data
+    const seedCols = m.fields.filter(f => !['id', 'created_at'].includes(f.name)).map(f => f.name);
+    if (seedCols.length > 0 && m.name !== 'users') {
+      const vals = seedCols.map(c => {
+        if (c === 'user_id') return `'00000000-0000-0000-0000-000000000001'`;
+        if (c.includes('email')) return `'demo@example.com'`;
+        if (c.includes('name') || c.includes('title')) return `'Sample ${m.name}'`;
+        if (c.includes('status')) return `'active'`;
+        if (c.includes('price') || c.includes('amount')) return '29.99';
+        if (c.includes('description') || c.includes('content')) return `'Demo content for ${m.name}'`;
+        return `'demo'`;
+      });
+      seeds.push(`INSERT INTO ${m.name} (${seedCols.join(', ')}) VALUES (${vals.join(', ')});`);
+    }
+  }
+
+  const schemaSQL = `-- ${appName} — Database Schema
+-- Generated from architecture specification
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+${tables.join('\n\n')}
 
 -- Indexes
-CREATE INDEX idx_projects_user_id ON projects(user_id);
-CREATE INDEX idx_tasks_project_id ON tasks(project_id);
-CREATE INDEX idx_tasks_status ON tasks(status);
-CREATE INDEX idx_subscriptions_user_id ON subscriptions(user_id);
+${idx.join('\n')}
 
 -- Row Level Security
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies
-CREATE POLICY "Users can view own profile" ON users FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Users can CRUD own projects" ON projects FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users can CRUD own tasks" ON tasks FOR ALL USING (
-  project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())
-);
-CREATE POLICY "Users can view own subscriptions" ON subscriptions FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Admins can view all users" ON users FOR SELECT USING (
-  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Updated_at trigger
-CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+${rls.join('\n\n')}
 `;
 
-  const seedSQL = `-- AppForge Seed Data
--- Run after schema migration
-
-INSERT INTO users (email, password_hash, name, role) VALUES
-  ('admin@appforge.dev', crypt('admin123', gen_salt('bf')), 'Admin User', 'admin'),
-  ('user@appforge.dev', crypt('user123', gen_salt('bf')), 'Test User', 'user');
-
-INSERT INTO projects (user_id, name, description, status) VALUES
-  ( (SELECT id FROM users WHERE email = 'user@appforge.dev'),
-    'Demo Project', 'A sample project for demonstration', 'active');
-
-INSERT INTO tasks (project_id, title, description, status, priority) VALUES
-  ( (SELECT id FROM projects WHERE name = 'Demo Project'),
-    'Setup database', 'Initialize the database schema', 'done', 'high'),
-  ( (SELECT id FROM projects WHERE name = 'Demo Project'),
-    'Build API', 'Create REST API endpoints', 'in_progress', 'high'),
-  ( (SELECT id FROM projects WHERE name = 'Demo Project'),
-    'Design UI', 'Create the user interface', 'todo', 'medium');
+  const seedSQL = `-- Demo seed data
+${seeds.join('\n')}
 `;
 
   return {
@@ -152,6 +135,7 @@ INSERT INTO tasks (project_id, title, description, status, priority) VALUES
     ],
   };
 }
+
 
 // ─── Backend Agent ─────────────────────────────────────────────────
 
@@ -164,10 +148,18 @@ export interface BackendAgentOutput {
   files: GeneratedFile[];
 }
 
-export const BACKEND_AGENT_SYSTEM_PROMPT = `You are a senior backend engineer. Given an architecture document, generate production-ready Next.js 15 App Router API routes in TypeScript.
+export const BACKEND_AGENT_SYSTEM_PROMPT = `You are a senior backend engineer specializing in Next.js App Router API design. You write secure, validated, production-ready API routes that follow REST conventions and handle errors gracefully.
 
-Generate exactly 3 files: auth/signup, auth/login, and one CRUD resource route. Include Zod validation and basic error handling. Keep each file under 40 lines — compact, no comments.
-Respond ONLY in valid JSON: {"files":[{"path":"src/app/api/auth/signup/route.ts","content":"...","agent":"backend","status":"generated"}]}`;
+RULES:
+- Generate the API routes specified in the architecture's apiEndpoints list. If no endpoints are listed, generate auth (signup + login) and one primary CRUD resource.
+- Every route must have: Zod schema validation on the request body, proper HTTP status codes (201 for create, 400 for validation, 401 for auth, 404 for not found, 500 for server), and structured JSON error responses with a clear "error" field.
+- Use Supabase client patterns (not raw SQL). Auth routes use supabase.auth.signUp/signInWithPassword.
+- CRUD routes verify authentication via supabase.auth.getUser() and filter queries by user_id.
+- Rate-limit expensive operations (AI calls, bulk inserts) with a comment noting where to add rate limiting.
+- Keep each file under 50 lines — compact, no unnecessary comments, no TODO placeholders. If something can't be completed, simplify the route rather than leaving a TODO.
+- TypeScript strict: no any types unless truly unavoidable.
+
+Respond ONLY in valid JSON: {"files":[{"path":"src/app/api/...","content":"...","agent":"backend","status":"generated"}]}`;
 
 export function generateDefaultBackendFiles(input: BackendAgentInput): BackendAgentOutput {
   // Architecture API endpoints inform the routes (used when AI is wired in)
@@ -335,9 +327,18 @@ export interface FrontendAgentOutput {
   files: GeneratedFile[];
 }
 
-export const FRONTEND_AGENT_SYSTEM_PROMPT = `You are a senior frontend engineer. Given an architecture document, generate production-ready React page components.
+export const FRONTEND_AGENT_SYSTEM_PROMPT = `You are a senior frontend architect specializing in Next.js 15 App Router and modern React patterns. You build pages that are beautiful, responsive, accessible, and deeply specific to the application's purpose.
 
-Generate 3-5 files max: key pages only. Use Next.js 15 App Router, TypeScript, Tailwind CSS, shadcn/ui patterns. Keep code compact — no excessive comments.
+RULES:
+- Generate the pages specified in the architecture's pageRoutes list. If no routes are listed, generate: a landing page, an auth page (login+signup combined), and a main app page specific to the app's purpose.
+- EVERY page must be visually distinct and app-specific. A quote generator should have quote forms and client cards. A task manager should have kanban boards or list views. A learning platform should have course cards and progress bars. NEVER generate a generic dashboard for every app.
+- Use the app's actual name, features, and data models from the spec to populate realistic UI content — not "Item 1, Item 2" but plausible entries that make the demo feel real.
+- Design: dark theme (bg-black), Tailwind CSS, shadcn/ui patterns, rounded-xl cards, subtle borders (border-white/10), gradient accents (from-violet-500 to-fuchsia-500), proper spacing (p-6, gap-4).
+- Responsive: mobile-first, works on phone screens. Use grid-cols-1 md:grid-cols-2 lg:grid-cols-3 patterns.
+- Accessible: proper semantic HTML, aria-labels on interactive elements, focus states, sufficient color contrast.
+- Interactive: useState for form state, loading states on buttons, error badges, success feedback. Not just static markup.
+- TypeScript strict, 'use client' where needed, proper imports.
+
 Respond ONLY in valid JSON: {"files":[{"path":"src/app/.../page.tsx","content":"...","agent":"frontend","status":"generated"}]}`;
 
 export function generateDefaultFrontendFiles(input: FrontendAgentInput): FrontendAgentOutput {

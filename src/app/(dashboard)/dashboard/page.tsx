@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, ArrowRight, LogOut, BookOpen, Pencil, Check, X } from 'lucide-react';
+import { ArrowRight, Pencil, Check, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/supabase/auth-context';
 
@@ -19,7 +19,7 @@ interface ProjectInfo {
 
 export default function DashboardListPage() {
   const router = useRouter();
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -39,11 +39,6 @@ export default function DashboardListPage() {
         .catch(() => {});
     }
   }, [user]);
-
-  const handleSignOut = async () => {
-    await signOut();
-    router.push('/login');
-  };
 
   const startRename = (e: React.MouseEvent, p: ProjectInfo) => {
     e.stopPropagation();

@@ -14,11 +14,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { createClient } from '@supabase/supabase-js';
-import { hasAIKey } from '@/lib/agents/ai-client';
+import { callAI, hasAIKey } from '@/lib/agents/ai-client';
 import { getProjectAnywhere } from '@/lib/agents/pipeline';
 import { rateLimit, getClientId } from '@/lib/rate-limit';
-
-const TELNYX_URL = 'https://api.telnyx.com/v2/ai/chat/completions';
 
 const SUPPORT_SYSTEM_PROMPT = `You are the BoDiGi 2.0 support agent. You know this platform front-to-back:
 
@@ -97,40 +95,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const aiMessages = [
-      { role: 'system', content: SUPPORT_SYSTEM_PROMPT },
-      { role: 'system', content: `USER'S PROJECT CONTEXT:\n${projectContext}` },
-      ...messages,
-    ];
-
-    const apiKey = process.env.TELNYX_API_KEY!;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000);
-    const response = await fetch(TELNYX_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: process.env.AI_MODEL || 'MiniMaxAI/MiniMax-M3-MXFP8',
-        messages: aiMessages,
-        temperature: 0.4,
-        max_tokens: 800,
-      }),
-    });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      throw new Error(`AI provider error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    let reply: string = data?.choices?.[0]?.message?.content || '';
-    if (!reply.trim()) {
-      throw new Error('Empty AI response');
-    }
+    // Use the shared AI client (OpenRouter preferred, Telnyx fallback)
+    const systemWithContext = `${SUPPORT_SYSTEM_PROMPT}\n\nUSER'S PROJECT CONTEXT:\n${projectContext}`;
+    const userContent = messages
+      .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
+      .join('\n');
+    let reply = await callAI(systemWithContext, userContent);
 
     // Escalation: AI decided it can't fix it → file a ticket
     let escalated = false;
