@@ -8,7 +8,7 @@
  */
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
-const FROM_ADDRESS = process.env.EMAIL_FROM || 'BoDiGi 2.0 <onboarding@resend.dev>';
+const FROM_ADDRESS = process.env.EMAIL_FROM || 'BoDiGi Support <support@bodigi2.com>';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://bodigi2.com';
 const ADMIN_NOTIFY = process.env.ADMIN_NOTIFY_EMAIL || 'bj82788@gmail.com';
 

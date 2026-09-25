@@ -124,7 +124,7 @@ export function SetupAgent({ isOpen, onClose, missingKeys = [], projectId }: Set
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-96 max-h-[600px] flex flex-col">
+    <div className="fixed bottom-4 left-4 z-50 w-96 max-w-[92vw] max-h-[600px] flex flex-col">
       <Card className="flex flex-col h-full shadow-2xl border-violet-500/30">
         {/* Header */}
         <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b border-white/10">

@@ -594,7 +594,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
       {/* Setup Agent floating button */}
       <button
         onClick={() => setSetupAgentOpen(true)}
-        className="fixed bottom-4 right-4 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/30 flex items-center justify-center hover:scale-110 transition-transform"
+        className="fixed bottom-4 left-4 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/30 flex items-center justify-center hover:scale-110 transition-transform"
         title="Setup Agent — Get help with API keys, deployment, and customization"
       >
         <Bot className="w-6 h-6 text-white" />
