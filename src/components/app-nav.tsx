@@ -102,7 +102,7 @@ export function AppNav() {
           </button>
 
           {appsOpen && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/60 overflow-hidden">
+            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/60 overflow-hidden z-50">
               <div className="px-4 py-3 border-b border-white/10">
                 <div className="text-sm font-semibold">Your apps</div>
                 <div className="text-[11px] text-white/40 mt-0.5">Everything you've built, in one place</div>
@@ -197,7 +197,7 @@ export function AppNav() {
           </button>
 
           {open && (
-            <div className="absolute right-0 mt-2 w-60 rounded-xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/60 overflow-hidden">
+            <div className="absolute right-0 mt-2 w-60 rounded-xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/60 overflow-hidden z-50">
               <div className="px-4 py-3 border-b border-white/10">
                 <div className="text-sm font-medium truncate">{user.email}</div>
                 <div className={`inline-block mt-1 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border ${tierColor}`}>
