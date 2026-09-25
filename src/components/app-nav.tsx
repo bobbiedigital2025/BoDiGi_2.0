@@ -218,6 +218,15 @@ export function AppNav() {
           <Plus className="w-3.5 h-3.5" /> New app
         </button>
 
+        {/* Support — opens the AI support chat panel (persisted conversation) */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('bodigi:open-support'))}
+          title="Support chat"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/25 text-sm text-white/70 hover:text-white transition"
+        >
+          <LifeBuoy className="w-4 h-4" /> <span className="hidden sm:inline">Support</span>
+        </button>
+
         {/* Admin support inbox — bell with open-ticket badge, dropdown of recent tickets */}
         {isAdmin && (
           <div className="relative" ref={inboxRef}>
