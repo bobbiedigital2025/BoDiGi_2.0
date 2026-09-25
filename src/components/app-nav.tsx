@@ -79,7 +79,7 @@ export function AppNav() {
     : 'bg-amber-400 animate-pulse';
 
   return (
-    <header className="border-b border-white/10 px-4 sm:px-6 py-3 flex items-center justify-between bg-black/80 backdrop-blur sticky top-0 z-40">
+    <header className="border-b border-white/10 px-4 sm:px-6 py-3 flex items-center justify-between bg-black/80 backdrop-blur sticky top-0 z-[110]">
       <button
         onClick={() => router.push('/dashboard')}
         className="flex items-center gap-2.5 hover:opacity-80 transition"
