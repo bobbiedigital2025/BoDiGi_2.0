@@ -33,7 +33,8 @@ export async function sendEmail({ to, subject, html }: SendEmailOptions): Promis
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from: FROM_ADDRESS, to, subject, html }),
+      // Resend is send-only — route any user replies to the admin Gmail
+      body: JSON.stringify({ from: FROM_ADDRESS, to, subject, html, reply_to: ADMIN_NOTIFY }),
     });
 
     if (!res.ok) {
