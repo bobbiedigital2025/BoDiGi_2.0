@@ -8,7 +8,10 @@
  */
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
-const FROM_ADDRESS = process.env.EMAIL_FROM || 'BoDiGi Support <support@bodigi2.com>';
+// Priority: explicit EMAIL_FROM > Vercel Resend integration's RESEND_EMAIL_DOMAIN > default
+const FROM_ADDRESS =
+  process.env.EMAIL_FROM ||
+  `BoDiGi Support <support@${process.env.RESEND_EMAIL_DOMAIN || 'bodigi2.com'}>`;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://bodigi2.com';
 const ADMIN_NOTIFY = process.env.ADMIN_NOTIFY_EMAIL || 'bj82788@gmail.com';
 
