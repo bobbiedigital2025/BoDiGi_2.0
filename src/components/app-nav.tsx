@@ -6,12 +6,22 @@ import { useAuth } from '@/lib/supabase/auth-context';
 import {
   Sparkles, ChevronDown, ChevronRight, Settings, LogOut, LayoutDashboard,
   ShieldCheck, LifeBuoy, Plus, FolderKanban, BookOpen, KeyRound, Megaphone,
+  Inbox,
 } from 'lucide-react';
 
 interface NavProject {
   id: string;
   name: string;
   status: string;
+}
+
+interface NavTicket {
+  id: string;
+  subject: string;
+  user_email: string | null;
+  project_name: string | null;
+  status: string;
+  created_at: string;
 }
 
 /**
@@ -24,20 +34,46 @@ export function AppNav() {
   const { user, profile, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [appsOpen, setAppsOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
   const [expandedApp, setExpandedApp] = useState<string | null>(null);
   const [projects, setProjects] = useState<NavProject[]>([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [tickets, setTickets] = useState<NavTicket[]>([]);
+  const [openTicketCount, setOpenTicketCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const appsRef = useRef<HTMLDivElement>(null);
+  const inboxRef = useRef<HTMLDivElement>(null);
+  const isAdminNow = profile?.role === 'admin';
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
       if (appsRef.current && !appsRef.current.contains(e.target as Node)) setAppsOpen(false);
+      if (inboxRef.current && !inboxRef.current.contains(e.target as Node)) setInboxOpen(false);
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
+
+  // Admins: poll the open-ticket count (and full list for the dropdown)
+  useEffect(() => {
+    if (!isAdminNow || !user) return;
+    let cancelled = false;
+    const load = () => {
+      fetch('/api/admin/support')
+        .then((r) => (r.ok ? r.json() : { tickets: [] }))
+        .then((data) => {
+          if (cancelled) return;
+          const list: NavTicket[] = data.tickets || [];
+          setTickets(list);
+          setOpenTicketCount(list.filter((t) => t.status === 'open').length);
+        })
+        .catch(() => {});
+    };
+    load();
+    const iv = setInterval(load, 30000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [isAdminNow, user]);
 
   // Load the user's apps when the dropdown first opens
   useEffect(() => {
@@ -181,6 +217,67 @@ export function AppNav() {
         >
           <Plus className="w-3.5 h-3.5" /> New app
         </button>
+
+        {/* Admin support inbox — bell with open-ticket badge, dropdown of recent tickets */}
+        {isAdmin && (
+          <div className="relative" ref={inboxRef}>
+            <button
+              onClick={() => setInboxOpen((o) => !o)}
+              title="Support inbox"
+              className="relative flex items-center justify-center w-9 h-9 rounded-lg border border-white/10 hover:border-white/25 text-white/70 hover:text-white transition"
+            >
+              <Inbox className="w-4 h-4" />
+              {openTicketCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {openTicketCount > 9 ? '9+' : openTicketCount}
+                </span>
+              )}
+            </button>
+
+            {inboxOpen && (
+              <div className="absolute right-0 mt-2 w-80 rounded-xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/60 overflow-hidden z-50">
+                <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">Support inbox</div>
+                    <div className="text-[11px] text-white/40 mt-0.5">
+                      {openTicketCount > 0 ? `${openTicketCount} open ticket${openTicketCount !== 1 ? 's' : ''}` : 'All clear'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setInboxOpen(false); router.push('/admin'); }}
+                    className="text-[11px] text-fuchsia-400 hover:underline"
+                  >
+                    Open admin
+                  </button>
+                </div>
+
+                <div className="max-h-80 overflow-y-auto">
+                  {tickets.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-xs text-white/40">
+                      No tickets — the AI chat is handling everything.
+                    </div>
+                  ) : (
+                    tickets.slice(0, 10).map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => { setInboxOpen(false); router.push('/admin'); }}
+                        className="w-full text-left px-4 py-3 hover:bg-white/5 transition border-b border-white/5 last:border-0"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.status === 'open' ? 'bg-red-400' : t.status === 'resolved' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                          <span className="text-sm truncate flex-1">{t.subject}</span>
+                        </div>
+                        <div className="text-[11px] text-white/40 mt-1 truncate">
+                          {t.user_email || 'unknown'}{t.project_name ? ` · ${t.project_name}` : ''} · {new Date(t.created_at).toLocaleDateString()}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="relative" ref={menuRef}>
           <button
