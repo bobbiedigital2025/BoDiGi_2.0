@@ -1,33 +1,58 @@
 /**
- * AppForge AI Client
+ * BoDiGi AI Client
  *
- * Unified AI calling layer. Uses the Telnyx Inference API —
- * OpenAI-compatible chat completions on Telnyx-owned GPUs.
- * Cheap, simple credit-based billing.
+ * Unified AI calling layer with provider failover:
  *
- * Default model: MiniMax-M3 — cheapest on Telnyx, and (unlike the GLM
- * reasoning models) it puts its full output budget into the response
- * content instead of internal reasoning tokens, which matters for the
- * long structured JSON payloads the agents generate.
- * Override with AI_MODEL env var (e.g. "zai-org/GLM-5.2").
+ *   1. OpenRouter (OPENROUTER_API_KEY) — preferred. One key, many
+ *      models, pay-as-you-go, no account-level gating. OpenAI-compatible
+ *      chat completions API.
+ *   2. Telnyx (TELNYX_API_KEY) — legacy fallback. Kept so existing
+ *      deployments don't break if the OpenRouter key is missing.
  *
- * When TELNYX_API_KEY is not configured, agents fall back
- * to their default generators (boilerplate mode).
+ * Default model: GPT-4o mini via OpenRouter — cheap, fast, reliable
+ * structured output. Override with AI_MODEL env var (any OpenRouter
+ * model slug, e.g. "google/gemini-2.5-flash", "anthropic/claude-3.5-haiku").
+ *
+ * When neither key is configured, agents fall back to their default
+ * generators (boilerplate mode).
  */
 
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const TELNYX_URL = 'https://api.telnyx.com/v2/ai/chat/completions';
 
-/** Default model — cheapest tier, full content output. */
-const DEFAULT_MODEL = process.env.AI_MODEL || 'MiniMaxAI/MiniMax-M3-MXFP8';
+/** Default model — cheapest tier with strong structured JSON output. */
+const DEFAULT_MODEL = process.env.AI_MODEL || 'openai/gpt-4o-mini';
+/** Telnyx model if falling back to Telnyx. */
+const TELNYX_MODEL = 'MiniMaxAI/MiniMax-M3-MXFP8';
 
-/** True when an AI provider key is available. */
+interface Provider {
+  url: string;
+  key: string;
+  model: string;
+  label: string;
+}
+
+function getProvider(): Provider | null {
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey) {
+    return { url: OPENROUTER_URL, key: orKey, model: DEFAULT_MODEL, label: 'OpenRouter' };
+  }
+  const txKey = process.env.TELNYX_API_KEY;
+  if (txKey) {
+    return { url: TELNYX_URL, key: txKey, model: TELNYX_MODEL, label: 'Telnyx' };
+  }
+  return null;
+}
+
+/** True when any AI provider key is available. */
 export function hasAIKey(): boolean {
-  return !!process.env.TELNYX_API_KEY;
+  return getProvider() !== null;
 }
 
 /** AI connection status for display in the dashboard. */
 export function getAIStatus(): { connected: boolean; model: string } {
-  return { connected: hasAIKey(), model: DEFAULT_MODEL };
+  const p = getProvider();
+  return { connected: p !== null, model: p ? p.model : 'none' };
 }
 
 /**
@@ -36,36 +61,42 @@ export function getAIStatus(): { connected: boolean; model: string } {
  * Throws on API errors — callers should catch and fall back.
  */
 export async function callAI(systemPrompt: string, userPrompt: string): Promise<string> {
-  const apiKey = process.env.TELNYX_API_KEY;
-  if (!apiKey) {
-    throw new Error('TELNYX_API_KEY is not configured');
+  const provider = getProvider();
+  if (!provider) {
+    throw new Error('No AI provider configured (set OPENROUTER_API_KEY or TELNYX_API_KEY)');
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90000); // 90s max per call
 
-  const response = await fetch(TELNYX_URL, {
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${provider.key}`,
+    'Content-Type': 'application/json',
+  };
+  // OpenRouter recommends these for app attribution/ranking
+  if (provider.label === 'OpenRouter') {
+    headers['HTTP-Referer'] = 'https://bodigi2.com';
+    headers['X-Title'] = 'BoDiGi 2.0';
+  }
+
+  const response = await fetch(provider.url, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers,
     signal: controller.signal,
     body: JSON.stringify({
-      model: DEFAULT_MODEL,
+      model: provider.model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.7,
-      // Compact prompts keep responses under 8K; truncation breaks parsers.
       max_tokens: 8192,
     }),
   }).finally(() => clearTimeout(timeout));
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Telnyx API error (${response.status}): ${errorBody}`);
+    throw new Error(`${provider.label} API error (${response.status}): ${errorBody}`);
   }
 
   const data = await response.json();
