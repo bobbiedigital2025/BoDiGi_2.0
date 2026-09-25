@@ -5,6 +5,8 @@ import { AuthProvider } from "@/lib/supabase/auth-context";
 import { FlashSale } from "@/components/flash-sale";
 import { AppNav } from "@/components/app-nav";
 import { SupportChat } from "@/components/support-chat";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -157,6 +159,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {children}
           <SupportChat />
         </AuthProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
