@@ -48,6 +48,9 @@ export default function AdminPage() {
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [openTicket, setOpenTicket] = useState<string | null>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [sendingReply, setSendingReply] = useState<string | null>(null);
+  const [replyStatus, setReplyStatus] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [userMenu, setUserMenu] = useState<string | null>(null);
   const [stats, setStats] = useState({ totalUsers: 0, totalProjects: 0, completedProjects: 0, activeProjects: 0 });
 
@@ -117,6 +120,37 @@ export default function AdminPage() {
     });
     if (res.ok) {
       setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } as SupportTicket : t)));
+    }
+  };
+
+  const sendReply = async (id: string, ticket: SupportTicket) => {
+    const reply = (replyDrafts[id] || '').trim();
+    if (!reply) return;
+    setSendingReply(id);
+    setReplyStatus((prev) => ({ ...prev, [id]: undefined as never }));
+    try {
+      const res = await fetch('/api/admin/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, reply }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send');
+      setReplyDrafts((prev) => ({ ...prev, [id]: '' }));
+      setReplyStatus((prev) => ({
+        ...prev,
+        [id]: { ok: true, msg: data.emailSent ? `Emailed to ${ticket.user_email}` : 'Saved (email not configured)' },
+      }));
+      setTickets((prev) =>
+        prev.map((t) => (t.id === id && t.status === 'open' ? { ...t, status: 'in_progress' } : t))
+      );
+    } catch (err) {
+      setReplyStatus((prev) => ({
+        ...prev,
+        [id]: { ok: false, msg: err instanceof Error ? err.message : 'Send failed' },
+      }));
+    } finally {
+      setSendingReply(null);
     }
   };
 
@@ -296,6 +330,33 @@ export default function AdminPage() {
                             </Button>
                           )}
                         </div>
+                        {/* Reply by email */}
+                        {t.user_email && t.status !== 'closed' && (
+                          <div className="space-y-2">
+                            <textarea
+                              value={replyDrafts[t.id] || ''}
+                              onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                              placeholder={`Reply to ${t.user_email} by email...`}
+                              rows={3}
+                              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/50 resize-y"
+                            />
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="gradient"
+                                disabled={!replyDrafts[t.id]?.trim() || sendingReply === t.id}
+                                onClick={() => sendReply(t.id, t)}
+                              >
+                                {sendingReply === t.id ? 'Sending...' : 'Send reply'}
+                              </Button>
+                              {replyStatus[t.id] && (
+                                <span className={`text-xs ${replyStatus[t.id].ok ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                  {replyStatus[t.id].msg}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

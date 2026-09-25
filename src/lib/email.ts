@@ -9,7 +9,8 @@
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM_ADDRESS = process.env.EMAIL_FROM || 'BoDiGi 2.0 <onboarding@resend.dev>';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://bo-di-gi-2-0-plmk.vercel.app';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://bodigi2.com';
+const ADMIN_NOTIFY = process.env.ADMIN_NOTIFY_EMAIL || 'bj82788@gmail.com';
 
 interface SendEmailOptions {
   to: string;
@@ -133,6 +134,61 @@ export async function sendWelcomeEmail(to: string, name?: string) {
       <div style="text-align:center;margin:32px 0;">
         <a href="${APP_URL}/dashboard" style="display:inline-block;padding:14px 32px;border-radius:8px;background:linear-gradient(135deg,#8b5cf6,#d946ef);color:#fff;text-decoration:none;font-weight:600;">
           Build My First App
+        </a>
+      </div>
+    `),
+  });
+}
+
+/** Notify the admin that a new support ticket was filed. */
+export async function notifyAdminNewTicket(opts: {
+  userEmail: string;
+  subject: string;
+  projectName: string | null;
+  aiSummary: string;
+}) {
+  return sendEmail({
+    to: ADMIN_NOTIFY,
+    subject: `[Support] ${opts.subject}`,
+    html: baseTemplate(`
+      <h2 style="color:#fff;font-size:18px;">New support ticket</h2>
+      <p style="color:#a3a3a3;font-size:14px;line-height:1.6;">
+        From <strong style="color:#fff;">${opts.userEmail}</strong>
+        ${opts.projectName ? ` about <strong style="color:#fff;">${opts.projectName}</strong>` : ''}
+      </p>
+      <div style="background:#111;border:1px solid #222;border-radius:8px;padding:16px;margin:16px 0;">
+        <p style="color:#8b5cf6;font-size:12px;font-weight:600;margin:0 0 8px;">AI SUMMARY</p>
+        <p style="color:#a3a3a3;font-size:13px;line-height:1.6;white-space:pre-wrap;margin:0;">${opts.aiSummary.replace(/</g, '&lt;').slice(0, 1500)}</p>
+      </div>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${APP_URL}/admin" style="display:inline-block;padding:14px 32px;border-radius:8px;background:linear-gradient(135deg,#8b5cf6,#d946ef);color:#fff;text-decoration:none;font-weight:600;">
+          Reply in Admin Inbox
+        </a>
+      </div>
+    `),
+  });
+}
+
+/** Send an admin's reply to the user who filed the ticket. */
+export async function sendTicketReply(opts: {
+  userEmail: string;
+  ticketSubject: string;
+  replyText: string;
+}) {
+  return sendEmail({
+    to: opts.userEmail,
+    subject: `Re: ${opts.ticketSubject}`,
+    html: baseTemplate(`
+      <h2 style="color:#fff;font-size:18px;">Re: ${opts.ticketSubject.replace(/</g, '&lt;')}</h2>
+      <div style="background:#111;border:1px solid #222;border-radius:8px;padding:16px;margin:16px 0;">
+        <p style="color:#e5e5e5;font-size:14px;line-height:1.6;white-space:pre-wrap;margin:0;">${opts.replyText.replace(/</g, '&lt;')}</p>
+      </div>
+      <p style="color:#a3a3a3;font-size:14px;line-height:1.6;">
+        — BoDiGi Support. Need more help? Open the support chat in your dashboard any time.
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${APP_URL}/dashboard" style="display:inline-block;padding:14px 32px;border-radius:8px;background:linear-gradient(135deg,#8b5cf6,#d946ef);color:#fff;text-decoration:none;font-weight:600;">
+          Open Dashboard
         </a>
       </div>
     `),

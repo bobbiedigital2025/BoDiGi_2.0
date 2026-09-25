@@ -17,6 +17,7 @@ import { createClient } from '@supabase/supabase-js';
 import { callAI, hasAIKey } from '@/lib/agents/ai-client';
 import { getProjectAnywhere } from '@/lib/agents/pipeline';
 import { rateLimit, getClientId } from '@/lib/rate-limit';
+import { notifyAdminNewTicket } from '@/lib/email';
 
 const SUPPORT_SYSTEM_PROMPT = `You are the BoDiGi 2.0 support agent. You know this platform front-to-back:
 
@@ -161,5 +162,19 @@ async function fileTicket(
     priority: 'normal',
   });
 
-  return !error;
+  if (error) return false;
+
+  // Email the admin about the new ticket (no-op if RESEND_API_KEY unset)
+  try {
+    await notifyAdminNewTicket({
+      userEmail,
+      subject,
+      projectName,
+      aiSummary: aiSummary.slice(0, 2000),
+    });
+  } catch (err) {
+    console.error('Admin ticket notification failed:', err);
+  }
+
+  return true;
 }
