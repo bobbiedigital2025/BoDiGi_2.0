@@ -77,6 +77,10 @@ Respond with markdown only, using EXACTLY this structure:
 ===MARKETING_KIT===
 (the full marketing kit here)
 
+===LAUNCH_GUIDE===
+(the launch guide: sections 9 and 10 below — channel strategy and the
+BoDiGi 2.0 vote loop)
+
 The kit must include these sections, written about THIS specific app — not generic marketing filler:
 
 1. BRAND VOICE — the one-line positioning statement, 3-word brand personality, tagline options (3), and a "we sound like / we never sound like" pair.
@@ -94,6 +98,10 @@ The kit must include these sections, written about THIS specific app — not gen
 7. FIRST 30 DAYS PLAN — a week-by-week marketing calendar with specific actions, channels, and one measurable goal per week. Realistic for a solo founder with no marketing budget.
 
 8. WHAT'S WORKING RIGHT NOW — a short trend brief for THIS app's category and audience: 2-3 distribution tactics that are currently over-performing for apps like this one (name the specific platforms, communities, and content formats — e.g. which subreddits, which TikTok/Reels hook styles, which newsletter placements), one tactic that is saturated and worth avoiding, and the single highest-leverage channel for this exact audience. Be concrete and current — no "post consistently on social media" filler.
+
+9. CHANNEL STRATEGY — SKIP PRODUCT HUNT FIRST. A ranked launch plan for THIS app: 2-3 primary channels chosen by audience (developer tools → Hacker News Show HN + Indie Hackers, which converts ~23x better than PH for tools with no audience; niche consumer apps → the specific subreddits and communities where that audience already gathers; AI-powered apps → ThereIsAnAIForThat and Futurepedia directories). For each channel: why it fits THIS audience, the exact ready-to-post copy adapted to that platform's norms, and when to post. Then: "When to do Product Hunt" — only AFTER the app has traction and (if built with BoDiGi 2.0) after publishing to the BoDiGi Showcase, because showcase apps give social proof and a built-in support base. Include the exact PH sequencing advice: warm up your users first, launch at 00:01 PT, first comment = maker story.
+
+10. BUILT WITH BODIGI 2.0 — a short section (only if the app was built with BoDiGi 2.0, which it was): how to pay it forward while boosting your own launch. (a) Publish the app to the BoDiGi Showcase and share the link — investors and early users browse it. (b) The BoDiGi 2.0 Product Hunt connection: when BoDiGi 2.0 launches on PH, every showcased founder benefits — the showcase wall is the proof. Include a ready-to-paste line for their social posts: "Built with @BoDiGi2" plus a sentence telling THEIR audience how they built it in minutes, which enters them into BoDiGi's launch story. (c) A gentle ask template they can send THEIR users: "If this app helped you, upvoting BoDiGi 2.0 on Product Hunt helps the platform that built it — [link]". Frame it as mutual benefit, never obligation.
 
 Rules: every section must be specific to THIS app and THIS audience — if a line could be pasted into any other app's kit, rewrite it. Use real numbers where possible, name actual platforms and communities, write copy a founder could paste directly into a website or social post with zero editing, and keep every piece honest — no hype words like "revolutionary" or "game-changing".`;
 
@@ -123,10 +131,14 @@ export function parseDocsResponse(raw: string): { readme: string; investorPitch:
   };
 }
 
-export function parseMarketingResponse(raw: string): string {
+export function parseMarketingResponse(raw: string): { marketingKit: string; launchGuide: string } {
   const strip = (s: string) => s.replace(/^```markdown\s*/i, '').replace(/```\s*$/, '').trim();
-  const match = raw.match(/===MARKETING_KIT===\s*([\s\S]*?)$/i);
-  return match ? strip(match[1]) : strip(raw);
+  const match = raw.match(/===MARKETING_KIT===\s*([\s\S]*?)(?====LAUNCH_GUIDE===|$)/i);
+  const launchMatch = raw.match(/===LAUNCH_GUIDE===\s*([\s\S]*?)$/i);
+  return {
+    marketingKit: match ? strip(match[1]) : strip(raw),
+    launchGuide: launchMatch ? strip(launchMatch[1]) : '',
+  };
 }
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -267,11 +279,14 @@ export async function runDocsAgent(
 
       // Marketing kit — Pro/Enterprise perk, generated as a separate AI call
       let marketingKit = '';
+      let marketingLaunchGuide = '';
       if (options?.includeMarketing) {
         try {
-          const marketingPrompt = `Write the launch marketing kit for this application:\n\nName: ${state.name}\nIdea: ${state.idea}\nSummary: ${specs.summary}\nTarget audience: ${specs.targetAudience}\nKey features: ${specs.features.slice(0, 5).map(f => f.name).join(', ')}\nMonetization: ${specs.monetization}\n\nRespond with the marketing kit after the ===MARKETING_KIT=== delimiter line.`;
+          const marketingPrompt = `Write the launch marketing kit AND launch guide for this application:\n\nName: ${state.name}\nIdea: ${state.idea}\nSummary: ${specs.summary}\nTarget audience: ${specs.targetAudience}\nKey features: ${specs.features.slice(0, 5).map(f => f.name).join(', ')}\nMonetization: ${specs.monetization}\n\nRespond with the marketing kit after the ===MARKETING_KIT=== delimiter line, then the launch guide (channel strategy + BoDiGi 2.0 vote loop) after the ===LAUNCH_GUIDE=== delimiter line.`;
           const marketingRaw = await callAI(MARKETING_AGENT_SYSTEM_PROMPT, marketingPrompt);
-          marketingKit = parseMarketingResponse(marketingRaw);
+          const parsed = parseMarketingResponse(marketingRaw);
+          marketingKit = parsed.marketingKit;
+          marketingLaunchGuide = parsed.launchGuide;
         } catch (err) {
           log('warn', `Marketing kit AI call failed: ${err instanceof Error ? err.message : 'unknown'}`);
           marketingKit = generateDefaultMarketingKit(state);
@@ -283,7 +298,7 @@ export async function runDocsAgent(
         readme: docs.readme || fallbackReadme,
         investorPitch: docs.investorPitch || generateDefaultInvestorPitch(state),
         realityCheck: docs.realityCheck || generateDefaultRealityCheck(state),
-        launchGuide: docs.launchGuide || generateDefaultLaunchGuide(state),
+        launchGuide: marketingLaunchGuide || docs.launchGuide || generateDefaultLaunchGuide(state),
         marketingKit,
       };
     } catch (err) {
