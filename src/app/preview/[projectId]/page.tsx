@@ -8,6 +8,7 @@ import GitHubExportPanel from '@/components/github-export';
 import DomainAssistant from '@/components/domain-assistant';
 import Day2Panel from '@/components/day2-panel';
 import ShowcaseToggle from '@/components/showcase-toggle';
+import LoopBuilder from '@/components/loop-builder';
 import ModifyPanel from '@/components/modify-panel';
 import VersionHistory from '@/components/version-history';
 
@@ -425,6 +426,13 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           </div>
           <div className="mt-4">
             <ShowcaseToggle projectId={projectId} appName={state.name} />
+          </div>
+          <div className="mt-4">
+            <LoopBuilder
+              projectId={projectId}
+              tier={projectTier}
+              isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
+            />
           </div>
         </section>
 
