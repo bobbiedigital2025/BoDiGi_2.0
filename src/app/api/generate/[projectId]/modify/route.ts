@@ -21,7 +21,7 @@ import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
-import { checkModifyQuota } from '@/lib/quota';
+import { checkModifyQuota, checkAppAiQuota } from '@/lib/quota';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
 import { callAI, hasAIKey } from '@/lib/agents/ai-client';
@@ -90,6 +90,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       { status: 403 }
     );
     }
+  }
+
+  // Per-app AI cap — the sustainability guard (applies to every tier)
+  const appQuota = await checkAppAiQuota(user.id, projectId);
+  if (!appQuota.allowed) {
+    return NextResponse.json(
+      { error: appQuota.message, upgrade: true },
+      { status: 403 }
+    );
   }
 
   if (!hasAIKey()) {

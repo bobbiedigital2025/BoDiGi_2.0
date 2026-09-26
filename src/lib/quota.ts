@@ -141,3 +141,82 @@ export async function checkModifyQuota(userId: string): Promise<QuotaResult> {
       : `You've used your 3 free AI modifications. Upgrade to Pro for unlimited changes, rollbacks, GitHub sync, and the Day-2 Agent.`,
   };
 }
+
+/**
+ * PER-APP AI usage quota — the sustainability guard.
+ *
+ * Every AI change to an app (modify, Day-2 fix, loop wire) writes a
+ * MOD-SNAPSHOT ledger entry first, so per-project counts are exact.
+ * Caps keep BoDiGi's AI spend proportional to what each tier pays:
+ *   Free:      3 AI changes per app, lifetime (the trial)
+ *   Starter:   15 AI changes per app per month
+ *   Pro:       50 AI changes per app per month
+ *   Enterprise: unlimited
+ * Admin bypasses. Fails open (a counting error never blocks a paying user).
+ */
+const APP_AI_LIMITS: Record<string, { limit: number | null; windowHours: number; label: string }> = {
+  free: { limit: 3, windowHours: 0, label: '3 AI changes per app (free trial)' },
+  starter: { limit: 15, windowHours: 720, label: '15 AI changes per app per month' },
+  pro: { limit: 50, windowHours: 720, label: '50 AI changes per app per month' },
+  enterprise: { limit: null, windowHours: 0, label: 'unlimited' },
+};
+
+export async function checkAppAiQuota(userId: string, projectId: string): Promise<QuotaResult> {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tier, role')
+    .eq('id', userId)
+    .single();
+
+  const tier = profile?.tier || 'free';
+
+  if (profile?.role === 'admin') {
+    return { allowed: true, tier: 'admin', used: 0, limit: null, resetHours: 0 };
+  }
+
+  const config = APP_AI_LIMITS[tier] || APP_AI_LIMITS.free;
+
+  if (config.limit === null) {
+    return { allowed: true, tier, used: 0, limit: null, resetHours: 0 };
+  }
+
+  // Count this app's AI changes. windowHours 0 = lifetime (free trial).
+  let query = supabase
+    .from('project_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+    .like('message', 'MOD-SNAPSHOT%');
+
+  if (config.windowHours > 0) {
+    const since = Date.now() - config.windowHours * 3600 * 1000;
+    query = query.gte('timestamp', since);
+  }
+
+  const { count, error } = await query;
+
+  if (error) {
+    console.error('App AI quota check failed:', error.message);
+    return { allowed: true, tier, used: 0, limit: config.limit, resetHours: 0 };
+  }
+
+  const used = count || 0;
+  if (used >= config.limit!) {
+    return {
+      allowed: false,
+      tier,
+      used,
+      limit: config.limit,
+      resetHours: config.windowHours > 0 ? config.windowHours : 0,
+      message: config.windowHours > 0
+        ? `This app has used its ${config.label} — resets monthly, or upgrade for a higher cap.`
+        : `You've used this app's ${config.label}. Upgrade to keep improving this app with AI.`,
+    };
+  }
+
+  return { allowed: true, tier, used, limit: config.limit, resetHours: 0 };
+}

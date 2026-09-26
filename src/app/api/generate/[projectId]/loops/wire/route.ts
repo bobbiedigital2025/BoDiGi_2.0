@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkAppAiQuota } from '@/lib/quota';
 import { callAI, hasAIKey } from '@/lib/agents/ai-client';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
@@ -41,6 +42,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   if (!hasAIKey()) return NextResponse.json({ error: 'AI is not configured on this deployment.' }, { status: 500 });
+
+  // Per-app AI cap — the sustainability guard (applies to every tier)
+  const appQuota = await checkAppAiQuota(user.id, projectId);
+  if (!appQuota.allowed) {
+    return NextResponse.json({ error: appQuota.message, upgrade: true }, { status: 403 });
+  }
 
   // Ownership + load
   const { data: owned } = await supabase.from('projects').select('id, user_id').eq('id', projectId).maybeSingle();
