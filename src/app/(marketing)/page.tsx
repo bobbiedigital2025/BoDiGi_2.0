@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkles, ArrowRight, Zap, Shield, Code2, Rocket, Brain, CheckCircle2, LogOut, FileText, SearchCheck, MonitorSmartphone, Wallet, Clock, Users } from 'lucide-react';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { TermsGate } from '@/components/terms-gate';
+import { PlanInterview } from '@/components/plan-interview';
 
 const EXAMPLE_IDEAS = [
   'A booking platform for mobile pet groomers with online payments and appointment reminders',
@@ -24,6 +25,8 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [planMode, setPlanMode] = useState(false);
+  const pendingBrief = useRef<string | null>(null);
 
   // Check if user has already accepted terms (stored in localStorage for UX)
   useEffect(() => {
@@ -34,12 +37,14 @@ export default function LandingPage() {
   }, [user]);
 
   const doSubmit = async () => {
+    const finalIdea = pendingBrief.current ?? idea;
+    if (!finalIdea.trim()) { setLoading(false); return; }
     setLoading(true);
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea }),
+        body: JSON.stringify({ idea: finalIdea }),
       });
       if (res.status === 401) {
         router.push('/login?redirect=/');
@@ -57,7 +62,7 @@ export default function LandingPage() {
   };
 
   const handleSubmit = async () => {
-    if (!idea.trim()) return;
+    if (!idea.trim() && !pendingBrief.current) return;
 
     // Redirect to login if not authenticated
     if (!user) {
@@ -138,6 +143,18 @@ export default function LandingPage() {
           {/* Idea Input */}
           <Card className="max-w-2xl mx-auto border-white/10">
             <CardContent className="p-6">
+              {planMode ? (
+                <PlanInterview
+                  onClose={() => setPlanMode(false)}
+                  onBuild={(brief) => {
+                    pendingBrief.current = brief;
+                    setIdea(brief);
+                    setPlanMode(false);
+                    handleSubmit();
+                  }}
+                />
+              ) : (
+                <>
               <Textarea
                 placeholder="Describe your business idea... Be as detailed or as simple as you like. The AI team handles the rest."
                 value={idea}
@@ -170,6 +187,16 @@ export default function LandingPage() {
                   )}
                 </Button>
               </div>
+              <div className="mt-3 text-center">
+                <button
+                  onClick={() => setPlanMode(true)}
+                  className="text-xs text-fuchsia-400/80 hover:text-fuchsia-300 transition"
+                >
+                  Not sure how to describe it? <span className="underline">Plan it with an agent first</span> — it interviews you, then builds the right thing
+                </button>
+              </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
