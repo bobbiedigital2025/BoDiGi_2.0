@@ -25,7 +25,7 @@ const plans: Plan[] = [
     price: 0,
     icon: <Sparkles className="w-6 h-6" />,
     color: 'from-gray-500 to-gray-600',
-    description: 'See what BoDiGi 2.0 can do',
+    description: 'Starts with 3 days of Pro free',
     features: [
       '1 AI-generated app per month',
       'Hosted preview inside BoDiGi 2.0',
@@ -266,7 +266,7 @@ export default function PricingPage() {
               },
               {
                 q: 'What API keys do I need?',
-                a: 'You need a Telnyx API key (for AI) and Supabase keys (for database). Our Setup Guide walks you through getting each one step by step.',
+                a: 'None to start. Every new account gets 3 days of Pro free, and your first app runs in our Zero-Key sandbox — it works the moment it deploys, no signups anywhere else. When you\'re ready to go live for real, our Setup Guide walks you through adding your own keys step by step.',
               },
               {
                 q: 'Can I cancel anytime?',

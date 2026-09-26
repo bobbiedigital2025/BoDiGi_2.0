@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
             tier,
             tier_expires_at: expiresAt.toISOString(),
             stripe_customer_id: session.customer as string,
+            is_trial: false, // real money landed — trial is over, exports unlock
           })
           .eq('id', userId);
 
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
             .update({
               tier,
               tier_expires_at: expiresAt.toISOString(),
+              is_trial: false,
             })
             .eq('id', userId);
         } else if (['canceled', 'unpaid', 'past_due'].includes(subscription.status)) {

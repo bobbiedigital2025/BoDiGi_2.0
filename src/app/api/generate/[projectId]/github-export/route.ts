@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveTier } from '@/lib/trial';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { decrypt } from '@/lib/encryption';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
@@ -58,18 +59,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
   }
 
-  // 1. Tier check — GitHub export is a Pro/Enterprise perk (admin bypasses)
+  // 1. Tier check — GitHub export is a PAID Pro/Enterprise perk (admin bypasses).
+  // Trial users are on borrowed Pro: resolveTier honors the clock, and
+  // is_trial blocks code ownership until a real payment lands.
   const { data: profile } = await supabase
     .from('profiles')
-    .select('tier, role')
+    .select('tier, role, is_trial, tier_expires_at')
     .eq('id', user.id)
     .single();
 
-  const tier = profile?.tier || 'free';
+  const tier = resolveTier(profile);
   const isAdmin = profile?.role === 'admin';
-  if (!isAdmin && !['pro', 'enterprise'].includes(tier)) {
+  if (!isAdmin && (!['pro', 'enterprise'].includes(tier) || profile?.is_trial)) {
     return NextResponse.json(
-      { error: 'GitHub export is a Pro feature. Upgrade to export your code to GitHub.', upgrade: true },
+      { error: 'GitHub export unlocks with a paid plan — your trial includes everything except code ownership. Upgrade to make the code yours.', upgrade: true },
       { status: 403 }
     );
   }

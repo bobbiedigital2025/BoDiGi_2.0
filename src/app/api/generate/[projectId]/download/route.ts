@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveTier } from '@/lib/trial';
 import JSZip from 'jszip';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase } from '@/lib/supabase/project-store';
@@ -28,16 +29,18 @@ export async function GET(
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  // Check tier — free gets watermarked exports, paid gets clean
+  // Check tier — free AND trial get watermarked exports, paid gets clean.
+  // The trial is a taste of Pro, not a transfer of the asset: clean code
+  // only leaves the platform when real money has arrived.
   const { data: profile } = await supabase
     .from('profiles')
-    .select('tier, role')
+    .select('tier, role, is_trial, tier_expires_at')
     .eq('id', user.id)
     .single();
 
-  const tier = profile?.tier || 'free';
+  const tier = resolveTier(profile);
   const isAdmin = profile?.role === 'admin';
-  const isPaid = isAdmin || tier !== 'free';
+  const isPaid = isAdmin || (tier !== 'free' && !profile?.is_trial);
 
   // Try in-memory first
   const project = getProject(projectId);

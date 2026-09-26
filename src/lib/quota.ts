@@ -8,6 +8,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { resolveTier } from './trial';
 
 export interface QuotaResult {
   allowed: boolean;
@@ -33,11 +34,11 @@ export async function checkBuildQuota(userId: string): Promise<QuotaResult> {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('tier, role')
+    .select('tier, role, is_trial, tier_expires_at')
     .eq('id', userId)
     .single();
 
-  const tier = profile?.tier || 'free';
+  const tier = resolveTier(profile);
 
   // Admin bypass
   if (profile?.role === 'admin') {
@@ -93,11 +94,11 @@ export async function checkModifyQuota(userId: string): Promise<QuotaResult> {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('tier, role')
+    .select('tier, role, is_trial, tier_expires_at')
     .eq('id', userId)
     .single();
 
-  const tier = profile?.tier || 'free';
+  const tier = resolveTier(profile);
 
   if (profile?.role === 'admin' || ['pro', 'enterprise', 'starter'].includes(tier)) {
     return { allowed: true, tier, used: 0, limit: null, resetHours: 0 };
@@ -169,11 +170,11 @@ export async function checkAppAiQuota(userId: string, projectId: string): Promis
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('tier, role')
+    .select('tier, role, is_trial, tier_expires_at')
     .eq('id', userId)
     .single();
 
-  const tier = profile?.tier || 'free';
+  const tier = resolveTier(profile);
 
   if (profile?.role === 'admin') {
     return { allowed: true, tier: 'admin', used: 0, limit: null, resetHours: 0 };

@@ -17,6 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveTier } from '@/lib/trial';
 import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
@@ -58,11 +59,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const adminRead = createAdminClient();
   const { data: profile } = await adminRead
     .from('profiles')
-    .select('tier, role')
+    .select('tier, role, is_trial, tier_expires_at')
     .eq('id', user.id)
     .single();
 
-  const tier = profile?.tier || 'free';
+  const tier = resolveTier(profile);
   const isAdmin = profile?.role === 'admin';
   let trialRemaining: number | null = null;
   if (!isAdmin && !['pro', 'enterprise'].includes(tier)) {

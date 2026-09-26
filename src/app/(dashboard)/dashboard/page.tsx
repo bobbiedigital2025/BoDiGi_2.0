@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowRight, Pencil, Check, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/supabase/auth-context';
+import TrialBanner from '@/components/TrialBanner';
 
 interface ProjectInfo {
   id: string;
@@ -82,6 +83,7 @@ export default function DashboardListPage() {
       {/* Global nav lives in the dashboard layout (AppNav) — brand, new-app, profile dropdown */}
 
       <div className="max-w-4xl mx-auto px-6 py-12">
+        <TrialBanner />
         <h2 className="text-2xl font-bold mb-6">Your Projects</h2>
         {projects.length === 0 ? (
           <Card>

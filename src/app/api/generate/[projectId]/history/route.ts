@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveTier } from '@/lib/trial';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
@@ -112,8 +113,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // Tier gate — same as modify: rollback is a Pro perk, admin bypasses
   const adminRead = createAdminClient();
-  const { data: profile } = await adminRead.from('profiles').select('tier, role').eq('id', user.id).single();
-  const tier = profile?.tier || 'free';
+  const { data: profile } = await adminRead.from('profiles').select('tier, role, is_trial, tier_expires_at').eq('id', user.id).single();
+  const tier = resolveTier(profile);
   const isAdmin = profile?.role === 'admin';
   if (!isAdmin && !['pro', 'enterprise'].includes(tier)) {
     return NextResponse.json(
