@@ -241,12 +241,38 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
+  // Persist sandbox state + deployment URL onto the project so the
+  // preview page can show a persistent sandbox banner (conversion hook:
+  // "connect GitHub to own your codebase"). Best-effort — never block.
+  try {
+    const { data: current } = await supabase
+      .from('projects')
+      .select('state')
+      .eq('id', projectId)
+      .single();
+    if (current?.state) {
+      await supabase
+        .from('projects')
+        .update({
+          state: {
+            ...current.state,
+            deploymentUrl: finalUrl,
+            sandboxProviders: sandbox.providers,
+          },
+        })
+        .eq('id', projectId);
+    }
+  } catch {
+    // non-fatal
+  }
+
   return NextResponse.json({
     success: true,
     url: finalUrl,
     project: projectSlug,
     dashboard: 'https://vercel.com/dashboard',
     sandboxProviders: sandbox.providers,
+    sandboxWarnings: sandbox.warnings.length > 0 ? sandbox.warnings : undefined,
     sandboxNote: sandbox.providers.length > 0
       ? `Running on BoDiGi test keys for: ${sandbox.providers.join(', ')}. Payments are in TEST mode and sandbox data is shared — replace the env vars in your Vercel project settings with your own keys before going live.`
       : undefined,

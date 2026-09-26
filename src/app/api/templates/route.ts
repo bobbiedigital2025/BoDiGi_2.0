@@ -9,6 +9,57 @@ import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 
+/**
+ * Automated QA pass for marketplace submissions. A template gets forked
+ * into strangers' accounts — so it must be a real, buildable app with no
+ * secrets baked in. Mirrors the admin security-audit patterns.
+ */
+async function runTemplateQa(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string
+): Promise<{ pass: boolean; failures: string[] }> {
+  const failures: string[] = [];
+
+  const { data: files } = await admin
+    .from('project_files')
+    .select('path, content')
+    .eq('project_id', projectId)
+    .limit(500);
+
+  if (!files || files.length < 5) {
+    failures.push('Too few files — this does not look like a complete app build.');
+    return { pass: false, failures };
+  }
+
+  const paths = files.map((f: any) => f.path as string);
+
+  // Structure: a Next.js app must have a package.json and an entry page
+  if (!paths.some((p) => p === 'package.json' || p.endsWith('/package.json'))) {
+    failures.push('Missing package.json — the app cannot install or build.');
+  }
+  if (!paths.some((p) => /(^|\/)app\/page\.tsx$/.test(p) || /(^|\/)src\/app\/page\.tsx$/.test(p) || /(^|\/)pages\/index\.(tsx|jsx|js)$/.test(p))) {
+    failures.push('Missing entry page (app/page.tsx) — the app has no home route.');
+  }
+
+  // Secret scan — same patterns as the admin security audit
+  const secretPatterns = [
+    { re: /sk_live_[A-Za-z0-9]{10,}/, label: 'Stripe live key' },
+    { re: /sk-or-v1-[A-Za-z0-9]{10,}/, label: 'OpenRouter key' },
+    { re: /eyJhbGciOiJIUzI1NiIs[A-Za-z0-9_-]{15,}/, label: 'JWT token' },
+    { re: /sk-[A-Za-z0-9]{20,}/, label: 'OpenAI-style key' },
+  ];
+  for (const f of files) {
+    const content = (f as any).content || '';
+    for (const p of secretPatterns) {
+      if (p.re.test(content)) {
+        failures.push(`Possible ${p.label} found in ${f.path} — remove it before listing.`);
+      }
+    }
+  }
+
+  return { pass: failures.length === 0, failures };
+}
+
 export async function GET() {
   const admin = createAdminClient();
   const { data } = await admin
@@ -67,6 +118,20 @@ export async function POST(request: NextRequest) {
   // Only finished builds can be templates — nobody wants to fork a half-built app
   if (isTemplate && owned.progress < 100) {
     return NextResponse.json({ error: 'Only completed builds can become templates — wait for the build to finish.' }, { status: 422 });
+  }
+
+  // ─── Marketplace QA gate ───
+  // Before anything can be listed, it must pass an automated quality pass:
+  // structure check (is this a real, buildable app?) + secret scan (no
+  // leaked keys riding into every fork). Keeps the marketplace clean.
+  if (isTemplate) {
+    const qa = await runTemplateQa(adminRead, projectId);
+    if (!qa.pass) {
+      return NextResponse.json({
+        error: 'Template QA failed — fix these before listing:',
+        failures: qa.failures,
+      }, { status: 422 });
+    }
   }
 
   const { error } = await adminRead

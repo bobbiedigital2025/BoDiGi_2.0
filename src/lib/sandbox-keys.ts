@@ -58,9 +58,10 @@ export const SANDBOX_PROVIDERS: SandboxProvider[] = [
  */
 export function computeSandboxEnv(
   requiredProviders: string[]
-): { env: Record<string, string>; providers: string[] } {
+): { env: Record<string, string>; providers: string[]; warnings: string[] } {
   const env: Record<string, string> = {};
   const providers: string[] = [];
+  const warnings: string[] = [];
 
   for (const sp of SANDBOX_PROVIDERS) {
     if (!requiredProviders.some((p) => p.toLowerCase() === sp.provider.toLowerCase())) continue;
@@ -71,11 +72,32 @@ export function computeSandboxEnv(
       if (!v) { complete = false; break; }
       values[appVar] = v;
     }
-    if (complete) {
-      Object.assign(env, values);
-      providers.push(sp.provider);
+    if (!complete) continue;
+
+    // ─── Abuse guards: the sandbox must never carry live-power keys ───
+    // Stripe: test-mode ONLY. A live key in the sandbox would let a
+    // malicious generated app move real money — refuse it outright.
+    if (sp.provider === 'Stripe') {
+      const secret = values.STRIPE_SECRET_KEY || '';
+      if (!secret.startsWith('sk_test_')) {
+        warnings.push('Stripe sandbox skipped — BODIGI_SANDBOX_STRIPE_SECRET_KEY is not a test-mode key (sk_test_...). Refusing to inject a live key into a sandboxed app.');
+        continue;
+      }
     }
+    // OpenRouter: can't verify the credit cap from code — the key MUST be
+    // a dedicated low-credit key (set the limit in the OpenRouter dashboard).
+    // Surface a reminder in the deploy response so it's never forgotten.
+    if (sp.provider === 'OpenRouter') {
+      warnings.push('Reminder: the sandbox OpenRouter key should be a dedicated key with a hard credit cap set in the OpenRouter dashboard — every sandboxed app can spend from it.');
+    }
+    // Resend: test sender only; unverified recipient domains bounce anyway.
+    if (sp.provider === 'Resend') {
+      warnings.push('Reminder: the sandbox Resend key should use a test sender domain — sandboxed apps can send from whatever it is configured with.');
+    }
+
+    Object.assign(env, values);
+    providers.push(sp.provider);
   }
 
-  return { env, providers };
+  return { env, providers, warnings };
 }

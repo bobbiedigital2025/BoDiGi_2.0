@@ -280,6 +280,28 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           </div>
         </header>
 
+        {/* Sandbox Mode banner — persistent conversion hook. Shown when the
+            app is deployed on BoDiGi test keys. The whole point: nudge the
+            user to own their codebase (GitHub export = Starter). */}
+        {Array.isArray((state as any).sandboxProviders) && (state as any).sandboxProviders.length > 0 && (
+          <div style={{ margin: '0 auto', maxWidth: '72rem', padding: '0 1.5rem' }}>
+            <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', background: 'linear-gradient(90deg, rgba(245,158,11,0.12), rgba(16,185,129,0.08))', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '0.75rem', padding: '0.875rem 1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ fontSize: '1.25rem' }}>⚡</span>
+                <div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#fbbf24' }}>Running in Sandbox Mode</div>
+                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', marginTop: '0.125rem' }}>
+                    Live on BoDiGi test keys ({(state as any).sandboxProviders.join(', ')}) — payments are test-mode. Connect your GitHub to own your codebase and deploy to your custom domain.
+                  </div>
+                </div>
+              </div>
+              <a href="/pricing" style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#fff', background: 'linear-gradient(90deg, #7c3aed, #c026d3)', padding: '0.5rem 1rem', borderRadius: '0.5rem', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                Own your code →
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Progress */}
         <div className="preview-section" style={{ paddingTop: '1rem', paddingBottom: '0.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#666', marginBottom: '0.5rem' }}>
