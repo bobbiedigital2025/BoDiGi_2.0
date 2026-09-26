@@ -14,6 +14,7 @@ import { decrypt } from '@/lib/encryption';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase } from '@/lib/supabase/project-store';
+import { computeSandboxEnv } from '@/lib/sandbox-keys';
 import type { GeneratedFile } from '@/lib/agents/types';
 
 const VERCEL_API = 'https://api.vercel.com';
@@ -91,10 +92,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const inMemory = getProject(projectId);
   let projectName: string;
   let files: GeneratedFile[];
+  let requiredProviders: string[] = [];
 
   if (inMemory) {
     projectName = inMemory.state.name;
     files = inMemory.files;
+    requiredProviders = (inMemory.state?.specs?.requiredApis || []).map((a: { provider: string }) => a.provider);
   } else {
     const sbProject = await loadProjectFromSupabase(projectId);
     if (!sbProject) {
@@ -111,6 +114,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     projectName = sbProject.state.name;
     files = sbProject.files || [];
+    requiredProviders = (sbProject.state?.specs?.requiredApis || []).map((a: { provider: string }) => a.provider);
   }
 
   if (files.length === 0) {
@@ -161,6 +165,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   // 5. Create the deployment with all files inline
+  // Zero-Key Sandbox: inject BoDiGi test-mode keys for required services
+  // the user hasn't wired up yet, so the app WORKS on first deploy.
+  const sandbox = computeSandboxEnv(requiredProviders);
+  if (Object.keys(sandbox.env).length > 0) {
+    await fetch(`${VERCEL_API}/v10/projects/${projectSlug}/env${teamQuery}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(
+        Object.entries(sandbox.env).map(([key, value]) => ({
+          key,
+          value,
+          target: ['production', 'preview', 'development'],
+          type: 'encrypted',
+        }))
+      ),
+    }).catch(() => null); // best-effort — never block a deploy on sandbox injection
+  }
+
   const deployFiles = files.map((f) => ({
     file: f.path.replace(/^\/+/, ''),
     data: f.content,
@@ -224,6 +246,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     url: finalUrl,
     project: projectSlug,
     dashboard: 'https://vercel.com/dashboard',
+    sandboxProviders: sandbox.providers,
+    sandboxNote: sandbox.providers.length > 0
+      ? `Running on BoDiGi test keys for: ${sandbox.providers.join(', ')}. Payments are in TEST mode and sandbox data is shared — replace the env vars in your Vercel project settings with your own keys before going live.`
+      : undefined,
     note: 'Your app is live on YOUR Vercel account. You can revoke BoDiGi\'s access anytime in Vercel Settings → Apps — your app keeps running either way.',
   });
 }

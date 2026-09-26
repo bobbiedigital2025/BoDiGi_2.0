@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 type DeployState =
   | { status: 'idle' }
   | { status: 'deploying' }
-  | { status: 'done'; url: string }
+  | { status: 'done'; url: string; sandboxProviders?: string[] }
   | { status: 'error'; message: string };
 
 export default function VercelDeployPanel({
@@ -45,7 +45,7 @@ export default function VercelDeployPanel({
       const res = await fetch(`/api/generate/${projectId}/vercel-deploy`, { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.success) {
-        setDeploy({ status: 'done', url: data.url });
+        setDeploy({ status: 'done', url: data.url, sandboxProviders: data.sandboxProviders });
       } else if (data.needToken) {
         setConnected(false);
         setDeploy({ status: 'error', message: 'Vercel connection missing — reconnect below.' });
@@ -106,6 +106,21 @@ export default function VercelDeployPanel({
             Running on <em>your</em> Vercel account — attach a custom domain in your Vercel dashboard anytime.
             BoDiGi's access can be revoked in Vercel Settings → Apps; your app keeps running either way.
           </div>
+          {deploy.sandboxProviders && deploy.sandboxProviders.length > 0 && (
+            <div style={{ marginTop: '0.75rem', padding: '0.625rem 0.875rem', borderRadius: '0.5rem', background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.25)' }}>
+              <div style={{ color: '#facc15', fontSize: '0.8125rem', fontWeight: 600 }}>
+                ⚡ Test mode: running on BoDiGi sandbox keys ({deploy.sandboxProviders.join(', ')})
+              </div>
+              <div style={{ color: '#a3a3a3', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                Your app is fully working right now — payments run in Stripe test mode and sandbox data is shared.
+                When you're ready for real customers, replace these env vars in{' '}
+                <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer" style={{ color: '#67e8f9', textDecoration: 'underline' }}>
+                  your Vercel project settings
+                </a>{' '}
+                with your own keys — the Setup Agent (bottom-left) walks you through getting each one.
+              </div>
+            </div>
+          )}
           <button onClick={startDeploy} style={{ ...btn, marginTop: '0.75rem', background: '#1a1a1a', color: '#fff', border: '1px solid #333' }}>
             Redeploy latest
           </button>

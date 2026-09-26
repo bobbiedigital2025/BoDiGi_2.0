@@ -5,6 +5,7 @@ import { DocsProtect } from '@/components/docs-protect';
 import { DocsShelf } from '@/components/docs-shelf';
 import VercelDeployPanel from '@/components/vercel-deploy';
 import GitHubExportPanel from '@/components/github-export';
+import DomainAssistant from '@/components/domain-assistant';
 import ModifyPanel from '@/components/modify-panel';
 import VersionHistory from '@/components/version-history';
 
@@ -395,6 +396,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             tier={projectTier}
             isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
           />
+          <DomainAssistant />
         </section>
 
         {/* Modification Pass — chat-to-edit, with one-click Reality Check fixes (Pro perk) */}
