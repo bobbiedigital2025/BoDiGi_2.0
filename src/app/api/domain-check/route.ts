@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
+import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   const supabase = await createServerClient();
@@ -14,6 +15,12 @@ export async function GET(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  // Rate limit — RDAP is an external service, don't let one user hammer it
+  const rl = rateLimit(getClientId(request, user.id), RATE_LIMITS.api);
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Too many domain checks — try again in a minute.' }, { status: 429 });
   }
 
   const domain = (new URL(request.url).searchParams.get('domain') || '')

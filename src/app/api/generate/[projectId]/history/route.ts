@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
+import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
 import { getProject } from '@/lib/agents/pipeline';
 import type { GeneratedFile } from '@/lib/agents/types';
@@ -47,6 +48,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   if (!user) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  // Rate limit — history listing hits project_logs which can be large
+  const rl = rateLimit(getClientId(request, user.id), RATE_LIMITS.api);
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Too many requests — try again in a minute.' }, { status: 429 });
   }
 
   // Ownership check
@@ -96,6 +103,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   if (!user) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  const rlPost = rateLimit(getClientId(request, user.id), RATE_LIMITS.api);
+  if (!rlPost.success) {
+    return NextResponse.json({ error: 'Too many requests — try again in a minute.' }, { status: 429 });
   }
 
   // Tier gate — same as modify: rollback is a Pro perk, admin bypasses
