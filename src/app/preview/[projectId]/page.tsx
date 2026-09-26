@@ -9,6 +9,7 @@ import DomainAssistant from '@/components/domain-assistant';
 import Day2Panel from '@/components/day2-panel';
 import ShowcaseToggle from '@/components/showcase-toggle';
 import LoopBuilder from '@/components/loop-builder';
+import TemplateToggle from '@/components/template-toggle';
 import ModifyPanel from '@/components/modify-panel';
 import VersionHistory from '@/components/version-history';
 
@@ -433,6 +434,9 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
               tier={projectTier}
               isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
             />
+          </div>
+          <div className="mt-4">
+            <TemplateToggle projectId={projectId} appName={state.name} />
           </div>
         </section>
 

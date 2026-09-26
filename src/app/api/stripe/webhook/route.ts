@@ -51,6 +51,21 @@ export async function POST(request: NextRequest) {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
+
+      // ─── Template marketplace purchase ───
+      if (session.metadata?.kind === 'template_purchase') {
+        const purchaseId = session.metadata.purchase_id;
+        if (purchaseId) {
+          await supabase
+            .from('template_purchases')
+            .update({ status: 'paid', paid_at: new Date().toISOString() })
+            .eq('id', Number(purchaseId))
+            .eq('status', 'pending'); // idempotent — webhook retries can't double-flip
+          console.log(`Template purchase ${purchaseId} paid`);
+        }
+        break;
+      }
+
       const userId = session.metadata?.supabase_user_id;
       const tier = session.metadata?.tier;
 
