@@ -98,6 +98,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-4 text-sm text-white/60">
             <a href="#what-you-get" className="hover:text-white transition-colors hidden sm:inline">What you get</a>
             <a href="#how" className="hover:text-white transition-colors hidden sm:inline">How it works</a>
+            <a href="/showcase" className="hover:text-white transition-colors hidden sm:inline">Showcase</a>
             <a href="/pricing" className="hover:text-white transition-colors hidden sm:inline">Pricing</a>
             {user ? (
               <>
@@ -380,6 +381,7 @@ export default function LandingPage() {
             <p>BoDiGi 2.0 — made by Bobbie Digital. Built with Letta.</p>
             <div className="flex items-center justify-center gap-4 mt-3">
               <a href="/setup" className="hover:text-white/60 transition">Setup Guide</a>
+              <a href="/showcase" className="hover:text-white/60 transition">Showcase</a>
               <a href="/pricing" className="hover:text-white/60 transition">Pricing</a>
               <a href="/terms" className="hover:text-white/60 transition">Terms of Service</a>
               <a href="/privacy" className="hover:text-white/60 transition">Privacy Policy</a>

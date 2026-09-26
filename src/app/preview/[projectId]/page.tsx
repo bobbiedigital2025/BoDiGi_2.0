@@ -7,6 +7,7 @@ import VercelDeployPanel from '@/components/vercel-deploy';
 import GitHubExportPanel from '@/components/github-export';
 import DomainAssistant from '@/components/domain-assistant';
 import Day2Panel from '@/components/day2-panel';
+import ShowcaseToggle from '@/components/showcase-toggle';
 import ModifyPanel from '@/components/modify-panel';
 import VersionHistory from '@/components/version-history';
 
@@ -421,6 +422,9 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
               tier={projectTier}
               isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
             />
+          </div>
+          <div className="mt-4">
+            <ShowcaseToggle projectId={projectId} appName={state.name} />
           </div>
         </section>
 
