@@ -79,3 +79,65 @@ export async function checkBuildQuota(userId: string): Promise<QuotaResult> {
         }`,
   };
 }
+
+/**
+ * Modification trial quota — free users get 3 AI modifications/fixes
+ * (modify + Day-2 combined) to taste the feature, then the Pro gate.
+ * Paid tiers and admins are unlimited.
+ */
+export async function checkModifyQuota(userId: string): Promise<QuotaResult> {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tier, role')
+    .eq('id', userId)
+    .single();
+
+  const tier = profile?.tier || 'free';
+
+  if (profile?.role === 'admin' || ['pro', 'enterprise', 'starter'].includes(tier)) {
+    return { allowed: true, tier, used: 0, limit: null, resetHours: 0 };
+  }
+
+  // Count MOD-SNAPSHOT entries across ALL the user's projects (each modify
+  // and Day-2 fix writes one before changing files — a reliable ledger)
+  const { data: owned } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('user_id', userId);
+
+  const projectIds = (owned || []).map((p: { id: string }) => p.id);
+  if (projectIds.length === 0) {
+    return { allowed: true, tier, used: 0, limit: 3, resetHours: 0 };
+  }
+
+  const { count, error } = await supabase
+    .from('project_logs')
+    .select('id', { count: 'exact', head: true })
+    .in('project_id', projectIds)
+    .like('message', 'MOD-SNAPSHOT%');
+
+  if (error) {
+    // Fail open — don't block anyone over a counting hiccup
+    console.error('Modify quota check failed:', error.message);
+    return { allowed: true, tier, used: 0, limit: 3, resetHours: 0 };
+  }
+
+  const used = count || 0;
+  const allowed = used < 3;
+
+  return {
+    allowed,
+    tier,
+    used,
+    limit: 3,
+    resetHours: 0,
+    message: allowed
+      ? undefined
+      : `You've used your 3 free AI modifications. Upgrade to Pro for unlimited changes, rollbacks, GitHub sync, and the Day-2 Agent.`,
+  };
+}

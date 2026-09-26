@@ -21,6 +21,7 @@ import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkModifyQuota } from '@/lib/quota';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
 import { callAI, hasAIKey } from '@/lib/agents/ai-client';
@@ -49,7 +50,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
   }
 
-  // 1. Tier gate — modifications are a Pro/Enterprise perk (admin bypasses)
+  // 1. Tier gate — modifications are a Pro/Enterprise perk (admin bypasses).
+  // FREE users get a 3-usage trial of modify + Day-2 combined, then the gate.
   // Read the profile with the service role: the user is already authenticated
   // above, and this avoids RLS/session flakiness silently reading a null row
   // (which would downgrade a paying user to "free" and lock them out).
@@ -62,7 +64,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const tier = profile?.tier || 'free';
   const isAdmin = profile?.role === 'admin';
+  let trialRemaining: number | null = null;
   if (!isAdmin && !['pro', 'enterprise'].includes(tier)) {
+    if (tier === 'free') {
+      const trial = await checkModifyQuota(user.id);
+      if (trial.allowed) {
+        trialRemaining = 3 - (trial.used + 1); // after this one
+      } else {
+        return NextResponse.json(
+          {
+            error: trial.message,
+            upgrade: true,
+          },
+          { status: 403 }
+        );
+      }
+    } else {
     // Loud + precise: tell them WHICH account is signed in, so multi-account
     // users self-diagnose instead of thinking the feature is broken.
     return NextResponse.json(
@@ -72,6 +89,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       },
       { status: 403 }
     );
+    }
   }
 
   if (!hasAIKey()) {
@@ -281,5 +299,6 @@ Return the JSON with only the files that need to change.`;
     changed: validEdits.map((e) => ({ path: e.path, summary: e.summary })),
     protectedFiles: protectedFiles.map((f) => f.path),
     rejected: rejected.length > 0 ? rejected : undefined,
+    trialRemaining,
   });
 }

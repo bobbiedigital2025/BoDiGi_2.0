@@ -17,6 +17,7 @@ import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { decrypt } from '@/lib/encryption';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkModifyQuota } from '@/lib/quota';
 import { callAI, hasAIKey } from '@/lib/agents/ai-client';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
@@ -71,11 +72,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { data: profile } = await adminRead.from('profiles').select('tier, role').eq('id', user.id).single();
   const tier = profile?.tier || 'free';
   const isAdmin = profile?.role === 'admin';
+  let trialRemaining: number | null = null;
   if (!isAdmin && !['pro', 'enterprise'].includes(tier)) {
+    if (tier === 'free') {
+      const trial = await checkModifyQuota(user.id);
+      if (trial.allowed) {
+        trialRemaining = 3 - (trial.used + 1);
+      } else {
+        return NextResponse.json({ error: trial.message, upgrade: true }, { status: 403 });
+      }
+    } else {
     return NextResponse.json(
       { error: `The Day-2 Agent is a Pro feature — you're signed in as ${user.email || 'unknown'} (${tier}).`, upgrade: true },
       { status: 403 }
     );
+    }
   }
 
   if (!hasAIKey()) {
@@ -310,6 +321,7 @@ Return the JSON with only the files that need to change.`;
     changed: validEdits.map((e) => ({ path: e.path, summary: e.summary })),
     prUrl,
     prNote,
+    trialRemaining,
     note: prUrl
       ? 'Fixed in your app and a Pull Request is open on your GitHub repo — merge it to keep your code in sync.'
       : 'Fixed in your app. (No GitHub sync — connect a GitHub token in Setup to also get Pull Requests.)',

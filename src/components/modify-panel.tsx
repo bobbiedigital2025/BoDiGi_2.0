@@ -49,7 +49,10 @@ export default function ModifyPanel({
 
       if (res.ok && data.success) {
         setChanges(data.changed || []);
-        setMessage({ kind: 'ok', text: data.explanation || 'Change applied. Reload the preview to see it.' });
+        const trial = typeof data.trialRemaining === 'number'
+          ? ` ${data.trialRemaining} free change${data.trialRemaining === 1 ? '' : 's'} left — upgrade to Pro for unlimited.`
+          : '';
+        setMessage({ kind: 'ok', text: (data.explanation || 'Change applied. Reload the preview to see it.') + trial });
         setInstruction('');
       } else if (data.declined) {
         setMessage({ kind: 'info', text: data.message });

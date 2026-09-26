@@ -14,6 +14,7 @@ interface Day2Result {
   changed: { path: string; summary?: string }[];
   prUrl?: string | null;
   note?: string;
+  trialRemaining?: number | null;
 }
 
 export default function Day2Panel({ projectId, tier, isAdmin }: {
@@ -127,6 +128,11 @@ export default function Day2Panel({ projectId, tier, isAdmin }: {
         <div style={{ marginTop: '1rem', border: '1px solid rgba(74,222,128,0.25)', background: 'rgba(74,222,128,0.06)', borderRadius: '0.5rem', padding: '0.75rem 1rem' }}>
           <div style={{ color: '#4ade80', fontSize: '0.875rem', fontWeight: 600 }}>✓ Fixed</div>
           <p style={{ color: '#d4d4d4', fontSize: '0.8125rem', marginTop: '0.375rem' }}>{result.explanation}</p>
+          {typeof result.trialRemaining === 'number' && (
+            <p style={{ color: '#facc15', fontSize: '0.75rem', marginTop: '0.375rem' }}>
+              {result.trialRemaining} free fix{result.trialRemaining === 1 ? '' : 'es'} left — upgrade to Pro for unlimited.
+            </p>
+          )}
           <ul style={{ margin: '0.5rem 0 0 1.1rem', color: '#a3a3a3', fontSize: '0.75rem', display: 'grid', gap: '0.25rem' }}>
             {result.changed.map((c, i) => (
               <li key={i}><code style={{ color: '#67e8f9' }}>{c.path}</code>{c.summary ? ` — ${c.summary}` : ''}</li>
