@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { DocsProtect } from '@/components/docs-protect';
 import { DocsShelf } from '@/components/docs-shelf';
 import VercelDeployPanel from '@/components/vercel-deploy';
+import GitHubExportPanel from '@/components/github-export';
 import ModifyPanel from '@/components/modify-panel';
 import VersionHistory from '@/components/version-history';
 
@@ -388,6 +389,11 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             tier={projectTier}
             isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
             initiallyConnected={vercelConnected}
+          />
+          <GitHubExportPanel
+            projectId={projectId}
+            tier={projectTier}
+            isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
           />
         </section>
 
