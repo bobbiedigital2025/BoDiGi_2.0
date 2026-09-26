@@ -24,7 +24,7 @@ import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { checkModifyQuota, checkAppAiQuota } from '@/lib/quota';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
-import { callAI, hasAIKey } from '@/lib/agents/ai-client';
+import { callAI, hasAIKey, setUsageContext } from '@/lib/agents/ai-client';
 import type { GeneratedFile } from '@/lib/agents/types';
 
 const FORBIDDEN_PATH = /(^|\/)(\.env|.*auth.*|.*middleware.*|schema\.sql|seed\.sql|api\/.*route\.ts)/i;
@@ -203,7 +203,7 @@ Return the JSON with only the files that need to change.`;
 
   let result: ModificationResult;
   try {
-    const raw = await callAI(systemPrompt, userPrompt);
+    setUsageContext('modify', user.id, projectId); const raw = await callAI(systemPrompt, userPrompt);
     // Strip accidental markdown fences if the model added them
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
     result = JSON.parse(cleaned);

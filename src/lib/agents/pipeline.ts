@@ -43,7 +43,7 @@ import {
   runFrontendAgent,
 } from './codegen-agents';
 import { runTestingAgent, runComplianceAgent, runDocsAgent, runDevOpsAgent } from './qa-agents';
-import { hasAIKey, callAI, getAIStatus } from './ai-client';
+import { hasAIKey, callAI, getAIStatus, setUsageContext } from './ai-client';
 import { hasLettaKey, callLettaAgent, callWithFallback, getLettaStatus } from './letta-client';
 import type { ProjectState, GeneratedFile } from './types';
 import { hasSupabase } from '../supabase/server';
@@ -109,7 +109,7 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
               const raw = await callWithFallback(
                 'pm',
                 pmPrompt,
-                () => callAI(PM_AGENT_SYSTEM_PROMPT, pmPrompt),
+                () => { setUsageContext('build', userId, projectId); return callAI(PM_AGENT_SYSTEM_PROMPT, pmPrompt); },
                 (level, msg) => orchestrator.log('pm', level, msg)
               );
               result = parsePMResponse(raw, idea);

@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
-import { callAI, hasAIKey } from '@/lib/agents/ai-client';
+import { callAI, hasAIKey, setUsageContext } from '@/lib/agents/ai-client';
 import { PROVIDER_COMPARISONS, formatComparisonsForPrompt } from '@/lib/integrations-catalog';
 
 const INTERVIEW_SYSTEM_PROMPT = `You are the BoDiGi 2.0 Plan Agent — a sharp, friendly product strategist who interviews founders BEFORE anything gets built, so the build team creates exactly the right app.
@@ -102,11 +102,11 @@ export async function POST(request: NextRequest) {
 
   try {
     if (phase === 'synthesize') {
-      const brief = await callAI(SYNTHESIZE_SYSTEM_PROMPT, `Interview transcript:\n${transcript}\n\nProduce the build brief.`);
+      setUsageContext('interview', user.id); const brief = await callAI(SYNTHESIZE_SYSTEM_PROMPT, `Interview transcript:\n${transcript}\n\nProduce the build brief.`);
       return NextResponse.json({ brief });
     }
 
-    const reply = await callAI(
+    setUsageContext('interview', user.id); const reply = await callAI(
       `${INTERVIEW_SYSTEM_PROMPT}\n\nPROVIDER COMPARISON SHEET (consult this whenever recommending services or comparing pricing):\n\n${formatComparisonsForPrompt(PROVIDER_COMPARISONS)}`,
       `Interview so far:\n${transcript}\n\nPlan Agent's next message (one question only):`
     );

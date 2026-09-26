@@ -52,6 +52,35 @@ export async function POST(request: NextRequest) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
 
+      // ─── Revenue ledger: carve the AI reserve off the top of EVERY payment ───
+      // The reserve funds next month's AI usage. What's left is actual profit.
+      // Runs before any branch so subscriptions AND template sales both feed it.
+      try {
+        const gross = session.amount_total || 0;
+        if (gross > 0) {
+          // Reserve: 25% of every payment (covers a Pro user's 50 changes/mo
+          // at gpt-4o-mini prices with headroom; tune AI_RESERVE_PERCENT in env)
+          const reservePercent = Number(process.env.AI_RESERVE_PERCENT || 25);
+          const aiReserve = Math.round(gross * reservePercent / 100);
+          await supabase
+            .from('revenue_ledger')
+            .upsert({
+              stripe_session_id: session.id,
+              source: session.metadata?.kind === 'template_purchase' ? 'template_sale' : 'subscription',
+              user_id: session.metadata?.supabase_user_id || session.metadata?.buyer_user_id || null,
+              description: session.metadata?.tier
+                ? `${session.metadata.tier} subscription`
+                : `Template sale ${session.metadata?.template_project_id || ''}`.trim(),
+              gross_cents: gross,
+              ai_reserve_cents: aiReserve,
+              net_profit_cents: gross - aiReserve,
+            }, { onConflict: 'stripe_session_id' }); // idempotent — webhook retries can't double-book
+        }
+      } catch (ledgerErr) {
+        // Ledger failure must never block the payment itself
+        console.error('Revenue ledger write failed:', ledgerErr);
+      }
+
       // ─── Template marketplace purchase ───
       if (session.metadata?.kind === 'template_purchase') {
         const purchaseId = session.metadata.purchase_id;

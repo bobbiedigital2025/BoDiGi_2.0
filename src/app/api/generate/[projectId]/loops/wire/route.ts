@@ -12,7 +12,7 @@ import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { checkAppAiQuota } from '@/lib/quota';
-import { callAI, hasAIKey } from '@/lib/agents/ai-client';
+import { callAI, hasAIKey, setUsageContext } from '@/lib/agents/ai-client';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
 import type { GeneratedFile } from '@/lib/agents/types';
@@ -132,7 +132,7 @@ Generate the loop wiring. Return only the JSON.`;
 
   let result: { edits: Array<{ path: string; content: string; summary: string }>; explanation: string };
   try {
-    const raw = await callAI(systemPrompt, userPrompt);
+    setUsageContext('loop_wire', user.id, projectId); const raw = await callAI(systemPrompt, userPrompt);
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
     result = JSON.parse(cleaned);
   } catch {

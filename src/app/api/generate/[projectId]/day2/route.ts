@@ -18,7 +18,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { decrypt } from '@/lib/encryption';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { checkModifyQuota, checkAppAiQuota } from '@/lib/quota';
-import { callAI, hasAIKey } from '@/lib/agents/ai-client';
+import { callAI, hasAIKey, setUsageContext } from '@/lib/agents/ai-client';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
 import type { GeneratedFile } from '@/lib/agents/types';
@@ -187,7 +187,7 @@ Return the JSON with only the files that need to change.`;
 
   let result: ModificationResult;
   try {
-    const raw = await callAI(systemPrompt, userPrompt);
+    setUsageContext('day2', user.id, projectId); const raw = await callAI(systemPrompt, userPrompt);
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
     result = JSON.parse(cleaned);
   } catch {

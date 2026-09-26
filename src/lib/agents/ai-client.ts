@@ -105,5 +105,67 @@ export async function callAI(systemPrompt: string, userPrompt: string): Promise<
     throw new Error('AI returned an empty response');
   }
 
+  // ─── Usage accounting (fire-and-forget — never blocks the response) ───
+  try {
+    const usage = data.usage || {};
+    const inputTokens = usage.prompt_tokens || 0;
+    const outputTokens = usage.completion_tokens || 0;
+    // gpt-4o-mini pricing: ~$0.15/M input, $0.60/M output → cents per token
+    const estCostCents = (inputTokens * 0.00000015 + outputTokens * 0.0000006);
+    logAiUsage({
+      kind: currentCallKind || 'other',
+      model: provider.model,
+      inputTokens,
+      outputTokens,
+      estCostCents,
+    });
+  } catch { /* accounting must never break generation */ }
+
   return content;
+}
+
+/**
+ * Usage accounting context — routes set the call kind + user/project
+ * before calling the AI so the ledger attributes costs correctly.
+ */
+let currentCallKind: string | null = null;
+let currentUserId: string | null = null;
+let currentProjectId: string | null = null;
+
+export function setUsageContext(kind: string, userId?: string, projectId?: string) {
+  currentCallKind = kind;
+  currentUserId = userId || null;
+  currentProjectId = projectId || null;
+}
+
+function logAiUsage(entry: {
+  kind: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  estCostCents: number;
+}) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return;
+
+  // Fire-and-forget: don't await, don't throw — accounting is best-effort
+  fetch(`${url}/rest/v1/ai_usage_log`, {
+    method: 'POST',
+    headers: {
+      'apikey': key,
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify([{
+      user_id: currentUserId,
+      project_id: currentProjectId,
+      kind: entry.kind,
+      model: entry.model,
+      input_tokens: entry.inputTokens,
+      output_tokens: entry.outputTokens,
+      est_cost_cents: entry.estCostCents,
+    }]),
+  }).catch(() => { /* silent — accounting never breaks generation */ });
 }

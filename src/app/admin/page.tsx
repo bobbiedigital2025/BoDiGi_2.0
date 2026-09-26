@@ -9,6 +9,7 @@ import { Sparkles, Users, FolderKanban, Activity, Shield, ArrowRight, LogOut, Li
 import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import SecurityAuditPanel from '@/components/security-audit-panel';
+import AccountingPanel from '@/components/accounting-panel';
 
 interface Profile {
   id: string;
@@ -481,6 +482,10 @@ export default function AdminPage() {
         {/* Security Audit */}
         <div className="mb-8">
           <SecurityAuditPanel />
+        </div>
+        {/* Accounting */}
+        <div className="mb-8">
+          <AccountingPanel />
         </div>
       </div>
     </div>
