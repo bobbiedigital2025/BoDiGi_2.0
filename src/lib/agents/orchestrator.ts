@@ -373,6 +373,70 @@ export class AppForgeOrchestrator {
   /**
    * Trigger the healing agent to analyze and fix a failed task.
    */
+  /**
+   * Guarantee a minimal installable scaffold. If an agent fell back and the
+   * build shipped without package.json/tsconfig, the exported ZIP can't
+   * install or build — and the template QA gate rejects it. Inject standard
+   * Next.js scaffold files for anything missing.
+   */
+  private ensureScaffoldFiles(): void {
+    const has = (path: string) => this.state.generatedFiles.some(f => f.path === path);
+    const add = (path: string, content: string) => {
+      this.state.generatedFiles.push({ path, content, agent: 'devops', status: 'generated' });
+      this.log('devops', 'info', `Scaffold guarantee: added missing ${path}`);
+    };
+
+    if (!has('package.json')) {
+      add('package.json', JSON.stringify({
+        name: this.state.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'bodigi-app',
+        version: '0.1.0',
+        private: true,
+        scripts: { dev: 'next dev', build: 'next build', start: 'next start', lint: 'next lint' },
+        dependencies: {
+          next: '^16.0.0',
+          react: '^19.0.0',
+          'react-dom': '^19.0.0',
+          '@supabase/supabase-js': '^2.45.0',
+          stripe: '^16.0.0',
+        },
+        devDependencies: {
+          typescript: '^5.6.0',
+          '@types/node': '^22.0.0',
+          '@types/react': '^19.0.0',
+          '@types/react-dom': '^19.0.0',
+        },
+      }, null, 2) + '\n');
+    }
+
+    if (!has('tsconfig.json')) {
+      add('tsconfig.json', JSON.stringify({
+        compilerOptions: {
+          target: 'ES2022',
+          lib: ['dom', 'dom.iterable', 'esnext'],
+          allowJs: true,
+          skipLibCheck: true,
+          strict: true,
+          noEmit: true,
+          esModuleInterop: true,
+          module: 'esnext',
+          moduleResolution: 'bundler',
+          resolveJsonModule: true,
+          isolatedModules: true,
+          jsx: 'preserve',
+          incremental: true,
+          plugins: [{ name: 'next' }],
+          paths: { '@/*': ['./*'] },
+        },
+        include: ['next-env.d.ts', '**/*.ts', '**/*.tsx', '.next/types/**/*.ts'],
+        exclude: ['node_modules'],
+      }, null, 2) + '\n');
+    }
+
+    if (!has('.gitignore')) {
+      add('.gitignore', ['node_modules', '.next', '.env*.local', '.vercel', '*.tsbuildinfo', 'next-env.d.ts', ''].join('\n'));
+    }
+  }
+
   private triggerHealing(failedTask: AgentTask, error: string): void {
     const now = Date.now();
     const healingTask: AgentTask = {
@@ -457,6 +521,7 @@ export class AppForgeOrchestrator {
       case 'docs':
         this.state.currentPhase = 6;
         this.state.status = 'done';
+        this.ensureScaffoldFiles();
         break;
       case 'healing': {
         // Healing completed — re-queue the originally failed task with the

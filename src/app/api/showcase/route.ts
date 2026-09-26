@@ -13,14 +13,14 @@ export async function GET() {
   const admin = createAdminClient();
   const { data } = await admin
     .from('projects')
-    .select('id, name, idea, showcase_slug, created_at, state')
+    .select('id, name, idea, showcase_slug, created_at, specs')
     .eq('is_public', true)
     .order('created_at', { ascending: false })
     .limit(60);
 
   // Shape for the gallery: name, one-liner, top features, slug
   const apps = (data || []).map((p: any) => {
-    const specs = p.state?.specs;
+    const specs = p.specs;
     return {
       id: p.id,
       slug: p.showcase_slug,

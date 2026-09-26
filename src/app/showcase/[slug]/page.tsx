@@ -20,13 +20,13 @@ async function loadApp(slug: string): Promise<ShowcaseDetail | null> {
     const admin = createAdminClient();
     const { data } = await admin
       .from('projects')
-      .select('id, name, idea, showcase_slug, created_at, state')
+      .select('id, name, idea, showcase_slug, created_at, specs')
       .eq('showcase_slug', slug)
       .eq('is_public', true)
       .maybeSingle();
 
     if (!data) return null;
-    const specs = data.state?.specs;
+    const specs = data.specs;
     return {
       name: data.name,
       tagline: specs?.summary || data.idea?.slice(0, 200) || '',

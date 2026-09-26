@@ -245,23 +245,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // preview page can show a persistent sandbox banner (conversion hook:
   // "connect GitHub to own your codebase"). Best-effort — never block.
   try {
-    const { data: current } = await supabase
+    await supabase
       .from('projects')
-      .select('state')
-      .eq('id', projectId)
-      .single();
-    if (current?.state) {
-      await supabase
-        .from('projects')
-        .update({
-          state: {
-            ...current.state,
-            deploymentUrl: finalUrl,
-            sandboxProviders: sandbox.providers,
-          },
-        })
-        .eq('id', projectId);
-    }
+      .update({ deployment_url: finalUrl })
+      .eq('id', projectId);
   } catch {
     // non-fatal
   }

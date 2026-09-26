@@ -64,14 +64,14 @@ export async function GET() {
   const admin = createAdminClient();
   const { data } = await admin
     .from('projects')
-    .select('id, name, idea, is_template, created_at, state')
+    .select('id, name, idea, is_template, created_at, specs')
     .eq('is_template', true)
     .eq('progress', 100)
     .order('created_at', { ascending: false })
     .limit(60);
 
   const templates = (data || []).map((p: any) => {
-    const specs = p.state?.specs;
+    const specs = p.specs;
     return {
       id: p.id,
       name: p.name,
