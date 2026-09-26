@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkles, Users, FolderKanban, Activity, Shield, ArrowRight, LogOut, LifeBuoy, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
+import SecurityAuditPanel from '@/components/security-audit-panel';
 
 interface Profile {
   id: string;
@@ -477,6 +478,10 @@ export default function AdminPage() {
             )}
           </CardContent>
         </Card>
+        {/* Security Audit */}
+        <div className="mb-8">
+          <SecurityAuditPanel />
+        </div>
       </div>
     </div>
   );
