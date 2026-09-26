@@ -5,6 +5,7 @@ import { DocsProtect } from '@/components/docs-protect';
 import { DocsShelf } from '@/components/docs-shelf';
 import VercelDeployPanel from '@/components/vercel-deploy';
 import ModifyPanel from '@/components/modify-panel';
+import VersionHistory from '@/components/version-history';
 
 // Pull the bullet points out of REALITY_CHECK.md's Cons / Risks section
 // so the Modify panel can offer one-click "fix this weakness" prompts.
@@ -398,6 +399,13 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
             weaknesses={extractWeaknesses(realityFile?.content)}
           />
+          <div className="mt-4">
+            <VersionHistory
+              projectId={projectId}
+              tier={projectTier}
+              isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
+            />
+          </div>
         </section>
 
         </>}
