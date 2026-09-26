@@ -170,3 +170,5 @@ Proprietary. All rights reserved.
 ---
 
 Built with [Letta](https://letta.com) — the AI agent framework.
+
+<!-- deploy-canary: efd2689+1 2026-09-26T08:20Z -->
