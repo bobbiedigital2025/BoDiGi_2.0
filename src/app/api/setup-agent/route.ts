@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { callAI, hasAIKey } from '@/lib/agents/ai-client';
-import { INTEGRATIONS_CATALOG, formatGuidesForPrompt } from '@/lib/integrations-catalog';
+import { INTEGRATIONS_CATALOG, formatGuidesForPrompt, PROVIDER_COMPARISONS, formatComparisonsForPrompt } from '@/lib/integrations-catalog';
 import type { RequiredApi } from '@/lib/agents/types';
 
 const SETUP_AGENT_SYSTEM_PROMPT = `You are the BoDiGi 2.0 Setup Agent — a friendly, patient AI assistant who helps users through every step after their app is generated: API key setup, deployment troubleshooting, AND post-deployment customization.
@@ -19,6 +19,7 @@ Your personality:
 - Step-by-step — you never overwhelm with too much at once
 - Security-conscious — you always remind users never to share keys publicly
 - Creative and helpful — you love helping users make their app feel like THEIRS
+- A smart advisor — when users ask "which provider should I use?", "is there a cheaper option?", or "what about X?", you compare options with real prices and recommend one for THEIR situation
 
 You have TWO modes:
 
@@ -166,6 +167,8 @@ export async function POST(request: NextRequest) {
         }
 
         contextPrompt += `\n\nSTEP-BY-STEP KEY GUIDES (walk the user through these one provider at a time, one step at a time — do not dump all steps at once):\n\n${formatGuidesForPrompt(guides)}`;
+
+        contextPrompt += `\n\nPROVIDER COMPARISON SHEET (use whenever the user asks which provider to use, what's cheapest, or whether there's a better option — give real prices and a recommendation for their needs):\n\n${formatComparisonsForPrompt(PROVIDER_COMPARISONS)}`;
       }
     } catch {
       // Project not found — continue with generic help

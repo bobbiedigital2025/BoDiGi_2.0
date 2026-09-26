@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { callAI, hasAIKey } from '@/lib/agents/ai-client';
+import { PROVIDER_COMPARISONS, formatComparisonsForPrompt } from '@/lib/integrations-catalog';
 
 const INTERVIEW_SYSTEM_PROMPT = `You are the BoDiGi 2.0 Plan Agent — a sharp, friendly product strategist who interviews founders BEFORE anything gets built, so the build team creates exactly the right app.
 
@@ -32,6 +33,7 @@ Style rules:
 - Suggest things they haven't thought of when it matters ("you'll probably want email receipts for that — want me to include it?")
 - After 5-8 answered questions, or when the user says they're ready, tell them you have enough to plan the build and they can hit "Build my app"
 - Never use jargon. The user may never have built software. Say "log in with Google" not "OAuth provider".
+- ADVISOR ROLE: when the user mentions a need (payments, email, maps, AI, SMS, file uploads), give a quick recommendation from your provider comparison sheet — name the pick, one reason, and the cost in plain numbers ("free up to 3,000 emails a month"). If they ask "what about X?" or "which is cheapest?", compare the options briefly (2-3 sentences) using the sheet, then land on a recommendation for THEIR needs. Always mention free tiers — founders watch every dollar.
 
 When the user says "build it", "that's enough", "just build it", or similar — do NOT ask more questions. Tell them to hit the Build My App button and the AI team takes it from there.`;
 
@@ -104,7 +106,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ brief });
     }
 
-    const reply = await callAI(INTERVIEW_SYSTEM_PROMPT, `Interview so far:\n${transcript}\n\nPlan Agent's next message (one question only):`);
+    const reply = await callAI(
+      `${INTERVIEW_SYSTEM_PROMPT}\n\nPROVIDER COMPARISON SHEET (consult this whenever recommending services or comparing pricing):\n\n${formatComparisonsForPrompt(PROVIDER_COMPARISONS)}`,
+      `Interview so far:\n${transcript}\n\nPlan Agent's next message (one question only):`
+    );
     return NextResponse.json({ reply });
   } catch (err) {
     console.error('Interview agent error:', err);

@@ -180,3 +180,99 @@ ${g.steps.map((s, i) => `  ${i + 1}. ${s}`).join('\n')}`
     )
     .join('\n\n');
 }
+
+/**
+ * Provider comparisons — when a founder asks "which one should I use?"
+ * or "what's the cheapest option?", agents consult this. Each category
+ * lists the realistic options with pricing and a plain-English
+ * "best for" verdict.
+ */
+export interface ProviderComparison {
+  category: string;
+  options: {
+    name: string;
+    pricing: string;
+    bestFor: string;
+    catch?: string;
+  }[];
+  /** One-line default recommendation for a typical BoDiGi user */
+  defaultPick: string;
+}
+
+export const PROVIDER_COMPARISONS: ProviderComparison[] = [
+  {
+    category: 'AI / LLM access',
+    options: [
+      { name: 'OpenRouter', pricing: 'Pay-as-you-go, one key for 300+ models. Most models cost fractions of a cent per message.', bestFor: 'Almost everyone — one key, swap models freely, no commitment.', catch: 'Slightly marked-up prices vs going direct (usually <5%).' },
+      { name: 'OpenAI direct', pricing: 'Pay-as-you-go. GPT-4o-mini is extremely cheap for chat.', bestFor: 'Teams standardizing on OpenAI models with higher volume.', catch: 'One vendor; separate key per other provider.' },
+      { name: 'Anthropic direct', pricing: 'Pay-as-you-go. Claude models are strong at writing and code.', bestFor: 'Apps where output quality of long-form text matters most.', catch: 'Same single-vendor caveat.' },
+      { name: 'Groq', pricing: 'Free tier, then pay-as-you-go. Insanely fast (hundreds of tokens/sec).', bestFor: 'Speed-critical features — autocomplete, real-time chat.', catch: 'Smaller model selection.' },
+    ],
+    defaultPick: 'OpenRouter — one key covers every model, easy to switch later, no vendor lock-in.',
+  },
+  {
+    category: 'Payments',
+    options: [
+      { name: 'Stripe', pricing: 'No monthly fee. ~2.9% + 30¢ per charge. Test mode free forever.', bestFor: 'The safe default — huge docs, every platform integrates with it, scales from $0 to millions.', catch: 'You handle sales tax and some compliance yourself.' },
+      { name: 'PayPal / Venmo', pricing: '~3.49% + 49¢ per transaction.', bestFor: 'Audiences that trust the PayPal button (older shoppers, marketplaces).', catch: 'Clunkier checkout, weaker developer tools.' },
+      { name: 'Square', pricing: '2.9% + 30¢ online.', bestFor: 'Businesses that also sell in person (syncs with Square POS).', catch: 'Web checkout is less customizable.' },
+      { name: 'Lemon Squeezy', pricing: '5% + 50¢ per charge.', bestFor: 'Selling software/digital products without forming a company — they act as the merchant of record and handle global sales tax.', catch: 'Higher cut; less control.' },
+    ],
+    defaultPick: 'Stripe if the user has or can get a business setup; Lemon Squeezy if they are a solo creator who does not want to deal with taxes.',
+  },
+  {
+    category: 'Email',
+    options: [
+      { name: 'Resend', pricing: 'Free: 3,000 emails/mo. Then $20/mo for 50k.', bestFor: 'Modern apps — best developer experience, React email templates.', catch: 'Newer company, fewer enterprise features.' },
+      { name: 'SendGrid', pricing: 'Free: 100 emails/day. Then $19.95/mo.', bestFor: 'High volume and mature deliverability tooling.', catch: 'Dated API, slow to innovate.' },
+      { name: 'Postmark', pricing: '$15/mo for 10k emails. No free tier.', bestFor: 'Transactional email that absolutely must arrive (receipts, password resets).', catch: 'Costs money from day one.' },
+      { name: 'Mailchimp', pricing: 'Free: 1,000 contacts (marketing emails only).', bestFor: 'Newsletters and marketing campaigns — not app transactional email.', catch: 'Wrong tool for receipts/password resets.' },
+    ],
+    defaultPick: 'Resend — generous free tier, cleanest API, made for app developers.',
+  },
+  {
+    category: 'Maps / location',
+    options: [
+      { name: 'Google Maps', pricing: '$200/mo free credit — most small apps never pay.', bestFor: 'Best-in-class search, places data, directions.', catch: 'Requires a credit card; billing shocks happen if an app goes viral.' },
+      { name: 'Mapbox', pricing: 'Free tier ~50k map loads/mo.', bestFor: 'Beautiful custom-styled maps, cheaper at scale.', catch: 'Weaker place search.' },
+      { name: 'OpenStreetMap (Leaflet)', pricing: 'Free.', bestFor: 'Simple "show a pin on a map" features with zero budget.', catch: 'No turn-by-turn or place search.' },
+    ],
+    defaultPick: 'Google Maps for search/directions features; plain OpenStreetMap if the app just shows locations.',
+  },
+  {
+    category: 'Image / media hosting',
+    options: [
+      { name: 'Supabase Storage', pricing: 'Included in Supabase free tier (1GB).', bestFor: 'Simple uploads (avatars, a few images) — no new account needed since the app already uses Supabase.', catch: 'No automatic resizing/optimization.' },
+      { name: 'Cloudinary', pricing: 'Free: 25 credits/mo (~25GB bandwidth).', bestFor: 'Image-heavy apps — automatic resizing, compression, format conversion.', catch: 'Another account to manage.' },
+      { name: 'UploadThing', pricing: 'Free tier, then cheap.', bestFor: 'Quick file-upload widgets in Next.js apps.', catch: 'Smaller ecosystem.' },
+    ],
+    defaultPick: 'Supabase Storage for light needs (one less account); Cloudinary when the app is media-heavy.',
+  },
+  {
+    category: 'SMS / phone',
+    options: [
+      { name: 'Twilio', pricing: 'Pay-as-you-go, SMS ~1¢ each in the US.', bestFor: 'The industry standard — SMS, calls, WhatsApp, verification.', catch: 'Pricing adds up at volume.' },
+      { name: 'Vonage', pricing: 'Similar to Twilio.', bestFor: 'Slightly cheaper in some regions.', catch: 'Smaller ecosystem.' },
+      { name: 'Resend/Email instead', pricing: 'Free.', bestFor: 'Most apps — email notifications cover 90% of needs at zero cost.', catch: 'Not real-time like SMS.' },
+    ],
+    defaultPick: 'Ask first: does this really need texts, or would email notifications do the job? Email is free; SMS rarely is.',
+  },
+  {
+    category: 'Database + auth',
+    options: [
+      { name: 'Supabase', pricing: 'Free: 500MB DB, 50k users. Pro $25/mo.', bestFor: 'The BoDiGi default — Postgres, auth, storage, realtime in one.', catch: 'None for this stack.' },
+      { name: 'Neon', pricing: 'Free tier Postgres.', bestFor: 'Serverless Postgres only (no built-in auth).', catch: 'You would bolt on Clerk for auth.' },
+    ],
+    defaultPick: 'Supabase — the whole pipeline is built around it.',
+  },
+];
+
+/** Format comparisons into a prompt block. */
+export function formatComparisonsForPrompt(comparisons: ProviderComparison[]): string {
+  return comparisons
+    .map(
+      (c) => `${c.category.toUpperCase()} — default pick: ${c.defaultPick}
+${c.options.map((o) => `- ${o.name}: ${o.pricing} Best for: ${o.bestFor}${o.catch ? ` Watch out: ${o.catch}` : ''}`).join('\n')}`
+    )
+    .join('\n\n');
+}
