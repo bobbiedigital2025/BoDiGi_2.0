@@ -52,6 +52,7 @@ interface ProjectData {
       compliance: string[];
       monetization: string;
       marketplace: string;
+      requiredApis?: Array<{ provider: string; reason: string; envVars: string[]; signupUrl: string; costNote: string; required: boolean }>;
     } | null;
     deploymentUrl: string | null;
   };
@@ -123,7 +124,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
   // Detect if project has build issues (failed tasks). Missing deploymentUrl is NOT
   // an issue — apps are hosted previews inside BoDiGi 2.0, not external deployments.
   const hasDeploymentIssues = data?.state?.tasks?.some(t => t.status === 'failed');
-  const missingKeys = hasDeploymentIssues ? ['TELNYX_API_KEY', 'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] : [];
+  const missingKeys = hasDeploymentIssues ? ['OPENROUTER_API_KEY', 'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] : [];
 
   useEffect(() => {
     let active = true;
@@ -397,6 +398,32 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
                     <span className="text-white/40 text-xs">Monetization: </span>
                     <span className="text-white/70 text-sm">{state.specs.monetization}</span>
                   </div>
+                  {Array.isArray(state.specs.requiredApis) && state.specs.requiredApis.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-white/80 mb-2">Services this app needs</h4>
+                      <div className="space-y-2">
+                        {state.specs.requiredApis.map((api, i) => (
+                          <div key={i} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-white/90 flex items-center gap-2">
+                                {api.provider}
+                                {api.required && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-500/25">required</span>}
+                              </div>
+                              <div className="text-xs text-white/50 mt-0.5">{api.reason}</div>
+                              <div className="text-[11px] text-white/35 mt-0.5 font-mono truncate">{api.envVars.join(', ')}</div>
+                              {api.costNote && <div className="text-[11px] text-emerald-400/70 mt-0.5">{api.costNote}</div>}
+                            </div>
+                            {api.signupUrl && (
+                              <a href={api.signupUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-fuchsia-400 hover:underline mt-0.5">
+                                Get keys →
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-white/35 mt-2">The Setup Agent (bottom-left) walks you through getting each key, step by step.</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

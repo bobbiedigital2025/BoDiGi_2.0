@@ -13,7 +13,8 @@
  * This is the first agent in the pipeline. Everything downstream depends on its output.
  */
 
-import type { ProjectSpecs, FeatureSpec, UserStory, TechStackRecommendation } from './types';
+import type { ProjectSpecs, FeatureSpec, UserStory, TechStackRecommendation, RequiredApi } from './types';
+import { detectRequiredApis } from '@/lib/integrations-catalog';
 
 export interface PMAgentInput {
   idea: string;
@@ -76,8 +77,32 @@ The JSON structure must be:
   },
   "compliance": ["GDPR", "CCPA", "WCAG 2.1 AA"],
   "monetization": "Strategy description",
-  "marketplace": "web|ios|shopify|google-play|multi"
+  "marketplace": "web|ios|shopify|google-play|multi",
+  "requiredApis": [
+    {
+      "provider": "Stripe",
+      "reason": "Subscription billing for premium tier",
+      "envVars": ["STRIPE_SECRET_KEY"],
+      "signupUrl": "https://stripe.com",
+      "costNote": "No monthly fee, ~2.9% + 30c per charge",
+      "required": true
+    }
+  ]
 }
+
+REQUIRED APIS RULES:
+- requiredApis lists every third-party service the app needs API keys for, tied to actual features.
+- Supabase is ALWAYS required (database + auth). OpenRouter is required whenever the app has ANY AI feature (chat, generation, summarization, agents).
+- Only include an API if a feature genuinely needs it — no padding. A notes app does not need Stripe; a SaaS does.
+- Common mappings: payments/billing→Stripe, transactional email→Resend, maps/places→Google Maps, SMS/phone→Twilio, weather→OpenWeather, image/media pipelines→Cloudinary, repo features→GitHub.
+
+MODERN CAPABILITIES — spec these when the idea calls for them (do not force them):
+- Multi-agent systems: if the idea describes agents/assistants working together, spec an orchestrator + specialist agents pattern (like Vercel AI SDK tool loops or a server-side agent layer), not a single chatbot.
+- MCP (Model Context Protocol): if the app should connect to external AI tools/data sources, spec an MCP client integration (@modelcontextprotocol/sdk).
+- Agent-to-agent (A2A): if independent agents must hand off tasks, spec a message-passing layer over API routes/queues with typed contracts.
+- Realtime: collaborative features → Supabase Realtime channels.
+- Background work: scheduled/long-running jobs → cron routes + a jobs table, never long-lived requests.
+Prefer current, maintained libraries (Vercel AI SDK, @modelcontextprotocol/sdk, Supabase). Never spec deprecated or abandoned packages.
 
 Be thorough but realistic. Focus on what's needed for a v1 marketplace-ready release.`;
 
@@ -96,7 +121,7 @@ Respond with the JSON specification only.`;
  * Parse the PM agent's JSON response into a typed ProjectSpecs object.
  * Includes validation and fallbacks for missing fields.
  */
-export function parsePMResponse(response: string): PMAgentOutput {
+export function parsePMResponse(response: string, ideaText = ''): PMAgentOutput {
   let parsed: ProjectSpecs;
 
   // Strip markdown code fences that models often wrap around JSON
@@ -147,6 +172,23 @@ export function parsePMResponse(response: string): PMAgentOutput {
     compliance: parsed.compliance || ['GDPR', 'CCPA', 'WCAG 2.1 AA'],
     monetization: parsed.monetization || 'Freemium with premium subscription',
     marketplace: parsed.marketplace || 'web',
+    requiredApis: Array.isArray(parsed.requiredApis) && parsed.requiredApis.length > 0
+      ? parsed.requiredApis.map((a: RequiredApi) => ({
+          provider: a.provider || 'Unknown',
+          reason: a.reason || 'Required by app features',
+          envVars: Array.isArray(a.envVars) ? a.envVars : [],
+          signupUrl: a.signupUrl || '',
+          costNote: a.costNote || '',
+          required: a.required !== false,
+        }))
+      : detectRequiredApis(ideaText || parsed.summary || '').map((g) => ({
+          provider: g.provider,
+          reason: 'Detected from your app idea',
+          envVars: g.envVars,
+          signupUrl: g.signupUrl,
+          costNote: g.costNote,
+          required: g.provider === 'Supabase',
+        })),
   };
 
   return { specs };
@@ -243,6 +285,14 @@ export function generateDefaultSpecs(idea: string): PMAgentOutput {
       compliance: ['GDPR', 'CCPA', 'WCAG 2.1 AA'],
       monetization: 'Freemium with premium subscription tier',
       marketplace: 'web',
+      requiredApis: detectRequiredApis(idea).map((g) => ({
+        provider: g.provider,
+        reason: 'Detected from your app idea',
+        envVars: g.envVars,
+        signupUrl: g.signupUrl,
+        costNote: g.costNote,
+        required: g.provider === 'Supabase',
+      })),
     },
   };
 }

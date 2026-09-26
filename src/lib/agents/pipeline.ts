@@ -112,7 +112,7 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
                 () => callAI(PM_AGENT_SYSTEM_PROMPT, pmPrompt),
                 (level, msg) => orchestrator.log('pm', level, msg)
               );
-              result = parsePMResponse(raw);
+              result = parsePMResponse(raw, idea);
             } catch (err) {
               orchestrator.log('pm', 'warn', `AI call failed, using default specs: ${err instanceof Error ? err.message : 'unknown'}`);
               result = generateDefaultSpecs(idea);

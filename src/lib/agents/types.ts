@@ -85,6 +85,22 @@ export interface ProjectSpecs {
   compliance: string[];
   monetization: string | null;
   marketplace: 'web' | 'ios' | 'shopify' | 'google-play' | 'multi';
+  requiredApis: RequiredApi[];
+}
+
+export interface RequiredApi {
+  /** Provider name, e.g. "Stripe" */
+  provider: string;
+  /** Why this app needs it, tied to a feature, e.g. "Subscription billing" */
+  reason: string;
+  /** Env var names the generated app expects, e.g. ["STRIPE_SECRET_KEY"] */
+  envVars: string[];
+  /** Where the user signs up / gets the key */
+  signupUrl: string;
+  /** Free tier availability note for cost-anxious users */
+  costNote: string;
+  /** Always-on (Supabase) vs feature-dependent (Stripe only if payments) */
+  required: boolean;
 }
 
 export interface FeatureSpec {

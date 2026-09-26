@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { callAI, hasAIKey } from '@/lib/agents/ai-client';
+import { INTEGRATIONS_CATALOG, formatGuidesForPrompt } from '@/lib/integrations-catalog';
+import type { RequiredApi } from '@/lib/agents/types';
 
 const SETUP_AGENT_SYSTEM_PROMPT = `You are the BoDiGi 2.0 Setup Agent — a friendly, patient AI assistant who helps users through every step after their app is generated: API key setup, deployment troubleshooting, AND post-deployment customization.
 
@@ -29,10 +31,13 @@ When a user's deployment failed or they need API keys:
 5. Confirm when keys are configured correctly
 6. Celebrate with the user when everything works
 
-Key providers:
-- Telnyx (AI inference) — telnyx.com → API Keys
-- Supabase (database) — supabase.com → Project → Settings → API
+Key providers (detailed step-by-step guides are injected per-project below — use those exact steps):
+- OpenRouter (AI inference for any AI/agent feature) — openrouter.ai → profile → Keys
+- Supabase (database + auth) — supabase.com → Project → Settings → API
 - Vercel (deployment) — vercel.com → Settings → Tokens
+- Stripe (payments) — stripe.com → Developers → API keys
+- Resend (email) — resend.com → API Keys
+- Others from the catalog as the project requires
 
 **MODE 2: POST-DEPLOYMENT CUSTOMIZATION**
 Once the app is deployed and running, help users personalize it:
@@ -142,12 +147,25 @@ export async function POST(request: NextRequest) {
     try {
       const { data: project } = await supabase
         .from('projects')
-        .select('name, idea, specs')
+        .select('name, idea, specs, state')
         .eq('id', projectId)
         .single();
 
       if (project) {
         contextPrompt += `\n\nThe user's project is called "${project.name}" — described as: "${project.idea}". Tailor your help to this specific app's needs.`;
+
+        // Inject the app's required APIs with step-by-step setup guides
+        const state = (project.state || {}) as { specs?: { requiredApis?: RequiredApi[] } };
+        const specsApis = state.specs?.requiredApis || [];
+        const guides = specsApis.length > 0
+          ? INTEGRATIONS_CATALOG.filter((g) => specsApis.some((a) => a.provider.toLowerCase() === g.provider.toLowerCase()))
+          : INTEGRATIONS_CATALOG.filter((g) => ['Supabase', 'OpenRouter', 'Vercel'].includes(g.provider));
+
+        if (specsApis.length > 0) {
+          contextPrompt += `\n\nTHIS APP'S REQUIRED SERVICES (from its spec — present this list when the user asks what they need):\n${specsApis.map((a) => `- ${a.provider}: ${a.reason} (env vars: ${a.envVars.join(', ') || 'n/a'}) — sign up at ${a.signupUrl}. Cost: ${a.costNote}. ${a.required ? 'REQUIRED for the app to work.' : 'Optional but recommended.'}`).join('\n')}`;
+        }
+
+        contextPrompt += `\n\nSTEP-BY-STEP KEY GUIDES (walk the user through these one provider at a time, one step at a time — do not dump all steps at once):\n\n${formatGuidesForPrompt(guides)}`;
       }
     } catch {
       // Project not found — continue with generic help

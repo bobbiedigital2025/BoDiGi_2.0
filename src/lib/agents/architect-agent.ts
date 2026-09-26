@@ -32,6 +32,8 @@ Given a project specification, design a complete system architecture. You must d
 5. Security Model: 2-3 sentences on auth, authorization, data protection
 6. Scalability Notes: 2-3 sentences
 
+INTEGRATIONS: The spec may include requiredApis (third-party services the app needs, e.g. Stripe, Resend, OpenRouter, Google Maps). For each one, include the API endpoints that wrap it (e.g. /api/billing/checkout, /api/ai/chat) and note the integration in the overview. Third-party keys must live in environment variables referenced server-side — never in client components. If the spec calls for AI agents or multi-agent workflows, design a server-side agent layer (orchestrator + specialist modules) with endpoints per agent action, streaming where responses are long.
+
 Respond ONLY in valid, COMPACT JSON — no whitespace, no indentation, no comments. Keep field descriptions terse (2-5 words). This JSON must parse; favor completeness of structure over verbosity of description.
 
 Structure:
@@ -45,6 +47,7 @@ Target Audience: ${input.specs.targetAudience}
 Features: ${input.specs.features.map(f => f.name).join(', ')}
 Tech Stack: ${JSON.stringify(input.specs.techStack)}
 Marketplace: ${input.specs.marketplace}
+Required integrations: ${(input.specs.requiredApis || []).map(a => `${a.provider} (${a.reason}; env: ${a.envVars.join(', ')})`).join('; ') || 'Supabase only'}
 
 Respond with the JSON architecture only.`;
 }
