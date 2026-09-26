@@ -6,6 +6,7 @@ import { DocsShelf } from '@/components/docs-shelf';
 import VercelDeployPanel from '@/components/vercel-deploy';
 import GitHubExportPanel from '@/components/github-export';
 import DomainAssistant from '@/components/domain-assistant';
+import Day2Panel from '@/components/day2-panel';
 import ModifyPanel from '@/components/modify-panel';
 import VersionHistory from '@/components/version-history';
 
@@ -409,6 +410,13 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           />
           <div className="mt-4">
             <VersionHistory
+              projectId={projectId}
+              tier={projectTier}
+              isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
+            />
+          </div>
+          <div className="mt-4">
+            <Day2Panel
               projectId={projectId}
               tier={projectTier}
               isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
