@@ -101,13 +101,13 @@ export async function GET(request: NextRequest) {
   // Kinds map to the pipeline agents that made the calls. For builds,
   // the pipeline makes ~9 agent calls per app — we attribute per call kind.
   const AGENT_EXPLANATIONS: Record<string, string> = {
-    build: 'The 9-agent pipeline (PM, architect, DB, backend, frontend, security, QA, marketing, docs) — each app build runs all of them',
-    modify: 'The Modify Agent — surgical AI edits to a built app',
-    day2: 'The Day-2 Agent — post-launch issue diagnosis and fixes that open PRs',
-    loop_wire: 'The Loop Wiring Agent — generates engagement loop code into user apps',
-    interview: 'The Plan Mode Interview Agent — asks questions and synthesizes the build brief',
-    setup_agent: 'The Setup Agent — guided API key configuration chat',
-    support_chat: 'The Support Chat Agent — customer service conversations',
+    build: 'The build pipeline — Nova (PM), Atlas (architect), Vault (DB), Forge (backend), Prism (frontend), Aegis (compliance), Scout (testing), Scribe (docs) — every app build runs them all',
+    modify: 'Forge — surgical AI edits to a built app',
+    day2: 'Mend — post-launch issue diagnosis and fixes that open PRs',
+    loop_wire: 'Prism — generates engagement loop code into user apps',
+    interview: 'Nova — Plan Mode interview, asks questions and synthesizes the build brief',
+    setup_agent: 'Pilot — guided API key setup chat',
+    support_chat: 'The support chat — customer service conversations',
     other: 'Uncategorized AI calls',
   };
   const agentBreakdown = Array.from(byKind.entries()).map(([kind, v]) => ({

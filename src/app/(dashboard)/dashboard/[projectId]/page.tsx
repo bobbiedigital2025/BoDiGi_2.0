@@ -12,6 +12,7 @@ import {
   FlaskConical, Scale, Eye, List, BarChart3, Bot
 } from 'lucide-react';
 import { SetupAgent } from '@/components/setup-agent';
+import { agentName } from '@/lib/agents/types';
 
 interface AgentActivity {
   total: number;
@@ -332,7 +333,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
                                   t.status === 'in_progress' ? 'info' : 'default'
                                 } className="text-xs">
                                   <StatusIcon className={`w-3 h-3 mr-1 ${t.status === 'in_progress' ? 'animate-spin' : ''}`} />
-                                  {t.role}
+                                  {agentName(t.role)}
                                 </Badge>
                               );
                             })}
@@ -564,7 +565,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm capitalize">{role}</span>
+                          <span className="text-sm">{agentName(role)}</span>
                           <span className="text-xs text-white/40">
                             {activity.completed}/{activity.total}
                           </span>

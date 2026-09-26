@@ -23,6 +23,29 @@ export const AGENT_ROLES: AgentRole[] = [
   'testing', 'devops', 'compliance', 'docs', 'healing',
 ];
 
+/**
+ * Named identities for each pipeline agent — so everyone knows which
+ * bot is who. Named by Juno, Sept 26 2026, the night BoDiGi 2.0
+ * shipped its marketplace. Use everywhere agents are displayed.
+ */
+export const AGENT_NAMES: Record<AgentRole | string, string> = {
+  pm: 'Nova',          // the planner — new ideas start here
+  architect: 'Atlas',  // holds the whole structure up
+  frontend: 'Prism',   // everything you see, split into colors
+  backend: 'Forge',    // the machinery, made
+  database: 'Vault',   // keeps everything safe
+  testing: 'Scout',    // finds trouble before it arrives
+  devops: 'Pilot',     // gets it off the ground and keeps it flying
+  compliance: 'Aegis', // the shield
+  docs: 'Scribe',      // writes it all down
+  healing: 'Mend',     // fixes what breaks
+};
+
+/** Display name for any agent role — falls back to the raw role. */
+export function agentName(role: string): string {
+  return AGENT_NAMES[role] || role;
+}
+
 export type TaskStatus =
   | 'pending'
   | 'in_progress'
