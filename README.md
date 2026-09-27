@@ -1,6 +1,8 @@
-# BoDiGi 2.0™️
+<p align="center">
+  <img src="public/logo-md.png" alt="BoDiGi 2.0" width="280" />
+</p>
 
-**AI-powered application factory.** One prompt in — a full marketplace-ready app comes out.
+<p align="center"><strong>AI-powered application factory.</strong> One prompt in — a full marketplace-ready app comes out.</p>
 
 BoDiGi 2.0™️ uses a team of specialized AI agents to take a single plain-English description and produce a complete, deployable application: frontend, backend, database schema, API routes, tests, compliance docs, marketing kit, launch guide, and deployment configuration.
 

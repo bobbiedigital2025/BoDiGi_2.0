@@ -90,9 +90,8 @@ export default function LandingPage() {
         {/* Nav */}
         <nav className="flex items-center justify-between px-6 py-5 max-w-7xl mx-auto">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-mark-sm.png" alt="BoDiGi 2.0" className="w-8 h-8" />
             <span className="font-bold text-lg">BoDiGi 2.0</span>
           </div>
           <div className="flex items-center gap-4 text-sm text-white/60">

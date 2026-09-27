@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/supabase/auth-context';
 import {
-  Sparkles, ChevronDown, ChevronRight, Settings, LogOut, LayoutDashboard,
+  ChevronDown, ChevronRight, Settings, LogOut, LayoutDashboard,
   ShieldCheck, LifeBuoy, Plus, FolderKanban, BookOpen, KeyRound, Megaphone,
   Inbox,
 } from 'lucide-react';
@@ -120,9 +120,8 @@ export function AppNav() {
         onClick={() => router.push('/dashboard')}
         className="flex items-center gap-2.5 hover:opacity-80 transition"
       >
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-          <Sparkles className="w-3.5 h-3.5" />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-mark-sm.png" alt="BoDiGi 2.0" className="w-7 h-7" />
         <span className="font-semibold text-sm sm:text-base">BoDiGi 2.0</span>
       </button>
 
