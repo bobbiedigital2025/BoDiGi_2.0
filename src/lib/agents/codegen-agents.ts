@@ -665,7 +665,14 @@ function extractFiles(response: string, agent: AgentRole): GeneratedFile[] {
   } catch {
     const m = cleaned.match(/\{[\s\S]*\}/);
     if (m) {
-      parsed = JSON.parse(m[0]);
+      try {
+        parsed = JSON.parse(m[0]);
+      } catch {
+        // Common LLM JSON defect: trailing commas before } or ].
+        // "Expected double-quoted property name" right after a comma is this signature.
+        const repaired = m[0].replace(/,\s*([}\]])/g, '$1');
+        parsed = JSON.parse(repaired);
+      }
     } else {
       throw new Error('Agent returned invalid JSON');
     }
