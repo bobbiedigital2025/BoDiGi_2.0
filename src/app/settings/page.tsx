@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/supabase/auth-context';
+import { ApiKeysSection } from '@/components/api-keys-section';
 
 interface Project {
   id: string;
@@ -256,6 +257,12 @@ export default function SettingsPage() {
         </div>
 
         {/* ============ ACCOUNT ============ */}
+        {/* ============ API KEYS & CONNECTIONS ============ */}
+        <div style={card}>
+          <h2 style={h2}>API keys &amp; connections</h2>
+          <ApiKeysSection projects={projects.map((p) => ({ id: p.id, name: p.name }))} />
+        </div>
+
         <div style={card}>
           <h2 style={h2}>Account</h2>
           <div style={{ ...muted, marginBottom: '0.5rem' }}>{user.email}</div>
