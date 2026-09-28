@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import {
   Brain, Code2, Database, Shield, Rocket, FileText, Wrench,
   CheckCircle2, XCircle, Loader2, Clock, AlertCircle, Download, Zap, ZapOff,
-  FlaskConical, Scale, Eye, List, BarChart3, Bot
+  FlaskConical, Scale, Eye, List, BarChart3, Bot, Pencil
 } from 'lucide-react';
 import { SetupAgent } from '@/components/setup-agent';
 import { agentName } from '@/lib/agents/types';
@@ -129,6 +129,8 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
   const [view, setView] = useState<'pipeline' | 'preview'>('pipeline');
   const [setupAgentOpen, setSetupAgentOpen] = useState(false);
   const [brandBusy, setBrandBusy] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
 
   // Detect if project has build issues (failed tasks). Missing deploymentUrl is NOT
   // an issue — apps are hosted previews inside BoDiGi 2.0, not external deployments.
@@ -192,11 +194,48 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
       {/* Header */}
       <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur-xl z-50">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-xs font-bold">
-            AF
-          </div>
+          {state.specs?.brand?.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={state.specs.brand.logo_url} alt="" className="w-8 h-8 rounded-lg object-cover border border-white/10" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/logo-mark-sm.png" alt="BoDiGi 2.0" className="w-8 h-8" />
+          )}
           <div>
-            <h1 className="font-semibold text-sm">{state.name}</h1>
+            {renaming ? (
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Escape') { setRenaming(false); return; }
+                  if (e.key !== 'Enter') return;
+                  const name = nameDraft.trim();
+                  setRenaming(false);
+                  if (name.length < 2 || name === state.name) return;
+                  const res = await fetch(`/api/generate/${projectId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name }),
+                  });
+                  if (!res.ok) {
+                    const j = await res.json().catch(() => ({}));
+                    alert(j.error || 'Rename failed');
+                  }
+                }}
+                onBlur={() => setRenaming(false)}
+                className="font-semibold text-sm bg-white/10 border border-fuchsia-500/40 rounded px-2 py-0.5 outline-none w-56"
+              />
+            ) : (
+              <h1
+                className="font-semibold text-sm cursor-text group/title flex items-center gap-1.5"
+                title="Click to rename"
+                onClick={() => { setNameDraft(state.name); setRenaming(true); }}
+              >
+                {state.name}
+                <Pencil className="w-3 h-3 text-white/25 group-hover/title:text-fuchsia-400 transition" />
+              </h1>
+            )}
             <p className="text-xs text-white/40">Project ID: {state.id}</p>
           </div>
         </div>
