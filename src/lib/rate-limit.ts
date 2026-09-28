@@ -86,7 +86,7 @@ export const RATE_LIMITS = {
   /** Key storage writes */
   keyStorage: { limit: 20, windowSeconds: 3600 },    // 20/hour
   /** GitHub export — each export makes 2 GitHub API calls per file, so keep tight */
-  githubExport: { limit: 5, windowSeconds: 3600 },    // 5/hour
+  githubExport: { limit: 8, windowSeconds: 3600 },    // 8/hour — only counted once an export can actually run
   /** Stripe checkout */
   checkout: { limit: 10, windowSeconds: 3600 },      // 10/hour
   /** General API */

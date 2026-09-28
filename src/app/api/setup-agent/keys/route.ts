@@ -80,22 +80,32 @@ export async function POST(request: NextRequest) {
   const encrypted = encrypt(keyValue);
 
   try {
-    const { data, error } = await supabase
+    // Find-then-write instead of upsert-onConflict: the upsert depended on a
+    // specific unique index (user_id, project_id, provider) existing in the
+    // database, and silently 500'd "Failed to save key" for everyone when it
+    // didn't. This works regardless of the constraint layout.
+    let lookup = supabase
       .from('user_api_keys')
-      .upsert({
-        user_id: user.id,
-        project_id: projectId || null,
-        provider,
-        key_name: keyName,
-        key_value_encrypted: encrypted,
-        is_valid: true,
-        last_checked: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id,project_id,provider',
-      })
-      .select()
-      .single();
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('provider', provider)
+      .eq('key_name', keyName);
+    lookup = projectId ? lookup.eq('project_id', projectId) : lookup.is('project_id', null);
+    const { data: existing } = await lookup.maybeSingle();
+
+    const fields = {
+      key_name: keyName,
+      key_value_encrypted: encrypted,
+      is_valid: true,
+      last_checked: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = existing
+      ? await supabase.from('user_api_keys').update(fields).eq('id', existing.id).select().single()
+      : await supabase.from('user_api_keys').insert({
+          user_id: user.id, project_id: projectId || null, provider, ...fields,
+        }).select().single();
 
     if (error) throw error;
 
@@ -111,7 +121,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error('Key storage error:', err);
-    return NextResponse.json({ error: 'Failed to save key' }, { status: 500 });
+    // Surface the real detail to the key's owner — opaque failures are
+    // undebuggable for the very person who could fix them.
+    const detail = err instanceof Error ? err.message : 'unknown';
+    return NextResponse.json({ error: `Failed to save key: ${detail}` }, { status: 500 });
   }
 }
 

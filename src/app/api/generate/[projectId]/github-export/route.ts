@@ -53,11 +53,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  // Rate limit exports (separate bucket — each export makes 2 GitHub API calls per file)
-  const rl = rateLimit(getClientId(request, user.id), RATE_LIMITS.githubExport);
-  if (!rl.success) {
-    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
-  }
 
   // 1. Tier check — GitHub export is a PAID Pro/Enterprise perk (admin bypasses).
   // Trial users are on borrowed Pro: resolveTier honors the clock, and
@@ -133,6 +128,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       { error: 'No GitHub token found. Connect your GitHub account first (Add a GitHub token in Setup).', needToken: true },
       { status: 400 }
     );
+  }
+
+  // Rate limit only once a real export is possible — failed eligibility and
+  // missing-token responses must not burn the user's export budget.
+  const rl = rateLimit(getClientId(request, user.id), RATE_LIMITS.githubExport);
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Too many exports in the last hour — give it a little while and try again.' }, { status: 429 });
   }
 
   // 4. Repo options
