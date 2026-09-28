@@ -138,6 +138,72 @@ export function setUsageContext(kind: string, userId?: string, projectId?: strin
   currentProjectId = projectId || null;
 }
 
+/** Default image model — Gemini 2.5 Flash Image via OpenRouter (~4¢/image). */
+const IMAGE_MODEL = process.env.AI_IMAGE_MODEL || 'google/gemini-2.5-flash-image';
+
+/**
+ * Generate an image from a text prompt (OpenRouter image models only).
+ * Returns the image as raw base64 (no data-URL prefix).
+ * Throws on API errors or when no image is returned — callers should catch.
+ */
+export async function callImageAI(prompt: string): Promise<string> {
+  const rawKey = process.env.OPENROUTER_API_KEY;
+  if (!rawKey) {
+    throw new Error('Image generation requires OPENROUTER_API_KEY');
+  }
+  // Tolerate accidental whitespace/newlines baked into the key at save time.
+  const key = rawKey.replace(/\s+/g, '');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 180000); // 3 min — images are slow
+
+  const response = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://bodigi2.com',
+      'X-Title': 'BoDiGi 2.0',
+    },
+    signal: controller.signal,
+    body: JSON.stringify({
+      model: IMAGE_MODEL,
+      modalities: ['image', 'text'],
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  }).finally(() => clearTimeout(timeout));
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`OpenRouter image API error (${response.status}): ${errorBody}`);
+  }
+
+  const data = await response.json();
+  const images = data.choices?.[0]?.message?.images;
+  const dataUrl: string | undefined = images?.[0]?.image_url?.url;
+  if (!dataUrl || !dataUrl.includes(',')) {
+    throw new Error('Image model returned no image');
+  }
+
+  // ─── Usage accounting (fire-and-forget) ───
+  try {
+    const usage = data.usage || {};
+    const inputTokens = usage.prompt_tokens || 0;
+    const outputTokens = usage.completion_tokens || 0;
+    // Gemini 2.5 Flash Image: $30/M output tokens (~1290 tokens/image ≈ 3.9¢)
+    const estCostCents = (inputTokens * 0.00000015 + outputTokens * 0.00003);
+    logAiUsage({
+      kind: currentCallKind || 'image',
+      model: IMAGE_MODEL,
+      inputTokens,
+      outputTokens,
+      estCostCents,
+    });
+  } catch { /* accounting must never break generation */ }
+
+  return dataUrl.split(',', 2)[1];
+}
+
 function logAiUsage(entry: {
   kind: string;
   model: string;

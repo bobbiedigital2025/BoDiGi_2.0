@@ -12,6 +12,7 @@ interface ShowcaseDetail {
   monetization: string;
   marketplace: string;
   userStories: { id: string; role: string; goal: string; benefit: string }[];
+  logo?: string | null;
   createdAt: string;
 }
 
@@ -35,6 +36,7 @@ async function loadApp(slug: string): Promise<ShowcaseDetail | null> {
       monetization: specs?.monetization || '',
       marketplace: specs?.marketplace || 'web',
       userStories: (specs?.userStories || []).slice(0, 6),
+      logo: specs?.brand?.logo_url || null,
       createdAt: data.created_at,
     };
   } catch {
@@ -63,6 +65,10 @@ export default async function ShowcaseAppPage({ params }: { params: Promise<{ sl
 
         {/* Hero */}
         <div className="mt-8">
+          {app.logo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={app.logo} alt={`${app.name} logo`} className="w-20 h-20 rounded-2xl border border-white/10 object-cover mb-5" />
+          )}
           <h1 className="text-4xl font-bold">{app.name}</h1>
           <p className="text-lg text-white/60 mt-3">{app.tagline}</p>
           <div className="flex flex-wrap gap-2 mt-5 text-xs">

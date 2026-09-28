@@ -15,6 +15,7 @@ interface ShowcaseApp {
   tagline: string;
   features: string[];
   audience?: string;
+  logo?: string | null;
 }
 
 async function loadApps(): Promise<ShowcaseApp[]> {
@@ -22,14 +23,14 @@ async function loadApps(): Promise<ShowcaseApp[]> {
     const admin = createAdminClient();
     const { data } = await admin
       .from('projects')
-      .select('id, name, idea, showcase_slug, state')
+      .select('id, name, idea, showcase_slug, specs')
       .eq('is_public', true)
       .order('created_at', { ascending: false })
       .limit(60);
 
     return (data || [])
       .map((p: any) => {
-        const specs = p.state?.specs;
+        const specs = p.specs;
         return {
           id: p.id,
           slug: p.showcase_slug,
@@ -37,6 +38,7 @@ async function loadApps(): Promise<ShowcaseApp[]> {
           tagline: specs?.summary || p.idea?.slice(0, 140) || '',
           features: (specs?.features || []).slice(0, 4).map((f: any) => f.name),
           audience: specs?.targetAudience || '',
+          logo: specs?.brand?.logo_url || null,
         };
       })
       .filter((a: any) => a.slug);
@@ -80,7 +82,13 @@ export default async function ShowcasePage() {
                 href={`/showcase/${app.slug}`}
                 className="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 hover:border-fuchsia-500/40 hover:bg-white/[0.05] transition"
               >
-                <h2 className="text-lg font-semibold group-hover:text-fuchsia-300 transition">{app.name}</h2>
+                <div className="flex items-start gap-3">
+                  {app.logo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={app.logo} alt="" className="w-11 h-11 rounded-xl border border-white/10 object-cover flex-shrink-0" />
+                  )}
+                  <h2 className="text-lg font-semibold group-hover:text-fuchsia-300 transition">{app.name}</h2>
+                </div>
                 <p className="text-sm text-white/50 mt-2 line-clamp-3">{app.tagline}</p>
                 {app.features.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-4">

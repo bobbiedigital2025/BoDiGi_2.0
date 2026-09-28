@@ -29,7 +29,7 @@ BoDiGi 2.0™️ uses a team of specialized AI agents to take a single plain-Eng
 | Docs | **Scribe** | Documentation, investor docs, marketing kit |
 | Healing | **Mend** | Day-2 fixes — detects issues, opens PRs |
 
-Plus standalone agents: the Plan Mode interviewer, the Setup Agent (guided API keys), support chat, and the loop-wiring agent.
+Plus standalone agents: the Plan Mode interviewer, the Setup Agent (guided API keys), support chat, the loop-wiring agent, and the **Brand Agent** — on-demand logo, palette, and voice for every app, because a business builder that ships no brand ships anonymous software. The kit rides along in the ZIP export (`brand/logo.png`, `palette.json`, `BRAND.md`) and shows on the public showcase.
 
 ## Feature Set
 

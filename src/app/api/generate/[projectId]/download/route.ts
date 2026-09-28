@@ -86,6 +86,34 @@ export async function GET(
     zip.file(file.path, content);
   }
 
+  // Include the brand kit when the Brand Agent has run: logo, palette, guide.
+  const brand = (specs as Record<string, unknown> | null)?.brand as
+    | { logo_url?: string; palette?: Record<string, string>; voice?: string; tagline?: string; generated_at?: string }
+    | undefined;
+  if (brand?.palette) {
+    zip.file('brand/palette.json', JSON.stringify(brand.palette, null, 2));
+    zip.file('brand/BRAND.md', [
+      `# ${projectName} — Brand Kit`,
+      ``,
+      brand.tagline ? `**Tagline:** ${brand.tagline}` : null,
+      brand.voice ? `**Voice:** ${brand.voice}` : null,
+      ``,
+      `## Palette`,
+      ...Object.entries(brand.palette).map(([role, hex]) => `- **${role}:** \`${hex}\``),
+      ``,
+      `Logo: see brand/logo.png (generated ${brand.generated_at || 'recently'} by BoDiGi's Brand Agent).`,
+      ``,
+    ].filter((l) => l !== null).join('\n'));
+    if (brand.logo_url) {
+      try {
+        const logoRes = await fetch(brand.logo_url);
+        if (logoRes.ok) {
+          zip.file('brand/logo.png', Buffer.from(await logoRes.arrayBuffer()));
+        }
+      } catch { /* a missing logo never blocks the export */ }
+    }
+  }
+
   // Include manifest
   zip.file('bodigi.manifest.json', JSON.stringify({
     id: projectId,
