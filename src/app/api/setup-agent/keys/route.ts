@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminClient } from '@/lib/supabase/server';
 import { encrypt } from '@/lib/encryption';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 
