@@ -317,6 +317,9 @@ export function AppNav() {
                 <button className={item} onClick={() => { setOpen(false); router.push('/settings'); }}>
                   <Settings className="w-4 h-4" /> Settings
                 </button>
+                <button className={item} onClick={() => { setOpen(false); router.push('/setup'); }}>
+                  <KeyRound className="w-4 h-4" /> API & GitHub setup
+                </button>
                 {(tier === 'starter' || tier === 'pro' || tier === 'enterprise' || isAdmin) && (
                   <a className={item} href="mailto:support@bobbie.digital?subject=BoDiGi%202.0%20support">
                     <LifeBuoy className="w-4 h-4" /> Priority support

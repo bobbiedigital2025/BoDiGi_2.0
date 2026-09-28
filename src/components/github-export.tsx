@@ -7,7 +7,7 @@
  * stored token from Setup.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function GitHubExportPanel({ projectId, tier, isAdmin }: {
   projectId: string;
@@ -17,8 +17,52 @@ export default function GitHubExportPanel({ projectId, tier, isAdmin }: {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ kind: 'ok' | 'err'; text: string; repo?: string } | null>(null);
   const [isPrivate, setIsPrivate] = useState(true);
+  // GitHub connection — inline token management so nobody goes hunting
+  // through Setup when the export asks for a token.
+  const [ghConnected, setGhConnected] = useState<boolean | null>(null);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [tokenDraft, setTokenDraft] = useState('');
+  const [tokenBusy, setTokenBusy] = useState(false);
+  const [tokenMsg, setTokenMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const eligible = isAdmin || tier === 'pro' || tier === 'enterprise';
+
+  useEffect(() => {
+    if (!eligible) return;
+    fetch('/api/setup-agent/keys')
+      .then((r) => (r.ok ? r.json() : { keys: [] }))
+      .then((d) => {
+        const keys = d.keys || d || [];
+        setGhConnected(keys.some((k: { provider?: string }) => k.provider === 'github'));
+      })
+      .catch(() => setGhConnected(false));
+  }, [eligible]);
+
+  async function saveToken() {
+    if (tokenBusy) return;
+    setTokenBusy(true);
+    setTokenMsg(null);
+    try {
+      const res = await fetch('/api/setup-agent/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyName: 'github_token', keyValue: tokenDraft.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setGhConnected(true);
+        setShowTokenInput(false);
+        setTokenDraft('');
+        setTokenMsg({ kind: 'ok', text: 'GitHub connected — token saved encrypted. Push away.' });
+      } else {
+        setTokenMsg({ kind: 'err', text: data.error || data.message || 'Could not save the token.' });
+      }
+    } catch {
+      setTokenMsg({ kind: 'err', text: 'Network error — try again.' });
+    } finally {
+      setTokenBusy(false);
+    }
+  }
 
   async function exportToGithub() {
     if (busy) return;
@@ -38,7 +82,9 @@ export default function GitHubExportPanel({ projectId, tier, isAdmin }: {
           repo: data.repo,
         });
       } else if (data.needToken) {
-        setResult({ kind: 'err', text: 'No GitHub token yet — add one on the Setup page (GitHub section), then come back.' });
+        setGhConnected(false);
+        setShowTokenInput(true);
+        setResult({ kind: 'err', text: 'No GitHub token yet — paste one below and you are connected.' });
       } else if (data.upgrade) {
         setResult({ kind: 'err', text: data.error });
       } else {
@@ -88,6 +134,64 @@ export default function GitHubExportPanel({ projectId, tier, isAdmin }: {
       <p style={{ color: '#a3a3a3', fontSize: '0.875rem', marginTop: '0.5rem' }}>
         Creates a repo under your GitHub account and pushes every file — ready for Vercel/Netlify import or a developer to take over.
       </p>
+
+      {/* Connection status + inline token */}
+      <div style={{ marginTop: '0.75rem', fontSize: '0.875rem' }}>
+        {ghConnected === null ? (
+          <p style={{ color: '#737373' }}>Checking GitHub connection…</p>
+        ) : ghConnected && !showTokenInput ? (
+          <p style={{ color: '#10b981' }}>
+            ✓ GitHub connected{' '}
+            <button
+              onClick={() => setShowTokenInput(true)}
+              style={{ color: '#737373', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}
+            >
+              replace token
+            </button>
+          </p>
+        ) : (
+          <div style={{ border: '1px dashed #404040', borderRadius: '0.5rem', padding: '0.75rem', background: '#111' }}>
+            <p style={{ color: '#d4d4d4', marginBottom: '0.5rem' }}>
+              Paste a GitHub token — it saves encrypted and you never have to think about it again.{' '}
+              <a
+                href="https://github.com/settings/tokens/new?scopes=repo&description=BoDiGi%202.0%20export"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#67e8f9', textDecoration: 'underline' }}
+              >
+                Make one here (repo scope pre-selected) →
+              </a>
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="password"
+                value={tokenDraft}
+                onChange={(e) => setTokenDraft(e.target.value)}
+                placeholder="ghp_… or github_pat_…"
+                style={{ flex: 1, background: '#000', border: '1px solid #404040', borderRadius: '0.375rem', padding: '0.5rem 0.625rem', color: '#fff', fontSize: '0.8rem', fontFamily: 'monospace' }}
+              />
+              <button
+                onClick={saveToken}
+                disabled={tokenBusy || tokenDraft.trim().length < 10}
+                style={{ ...btn, padding: '0.5rem 0.875rem', fontSize: '0.8rem', opacity: tokenBusy ? 0.6 : 1 }}
+              >
+                {tokenBusy ? 'Saving…' : 'Save & connect'}
+              </button>
+            </div>
+            {ghConnected && (
+              <button
+                onClick={() => setShowTokenInput(false)}
+                style={{ color: '#737373', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', marginTop: '0.5rem', textDecoration: 'underline' }}
+              >
+                cancel — keep current token
+              </button>
+            )}
+          </div>
+        )}
+        {tokenMsg && (
+          <p style={{ color: tokenMsg.kind === 'ok' ? '#10b981' : '#f87171', marginTop: '0.5rem' }}>{tokenMsg.text}</p>
+        )}
+      </div>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem', fontSize: '0.875rem', color: '#d4d4d4', cursor: 'pointer' }}>
         <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
