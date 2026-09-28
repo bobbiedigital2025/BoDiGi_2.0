@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { encrypt } from '@/lib/encryption';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 
@@ -80,11 +81,15 @@ export async function POST(request: NextRequest) {
   const encrypted = encrypt(keyValue);
 
   try {
-    // Find-then-write instead of upsert-onConflict: the upsert depended on a
-    // specific unique index (user_id, project_id, provider) existing in the
-    // database, and silently 500'd "Failed to save key" for everyone when it
-    // didn't. This works regardless of the constraint layout.
-    let lookup = supabase
+    // Writes go through the admin client (service role) like every other
+    // server-side write in this codebase: the user is authenticated above
+    // and the row is pinned to their user_id, so this is safe — and it
+    // sidesteps table RLS, whose missing INSERT policy 500'd every key save.
+    const db = createAdminClient();
+
+    // Find-then-write scoped to user+project+provider+key_name (per-app keys
+    // like a Supabase URL plus service key must not collide).
+    let lookup = db
       .from('user_api_keys')
       .select('id')
       .eq('user_id', user.id)
@@ -102,8 +107,8 @@ export async function POST(request: NextRequest) {
     };
 
     const { data, error } = existing
-      ? await supabase.from('user_api_keys').update(fields).eq('id', existing.id).select().single()
-      : await supabase.from('user_api_keys').insert({
+      ? await db.from('user_api_keys').update(fields).eq('id', existing.id).select().single()
+      : await db.from('user_api_keys').insert({
           user_id: user.id, project_id: projectId || null, provider, ...fields,
         }).select().single();
 
@@ -123,7 +128,10 @@ export async function POST(request: NextRequest) {
     console.error('Key storage error:', err);
     // Surface the real detail to the key's owner — opaque failures are
     // undebuggable for the very person who could fix them.
-    const detail = err instanceof Error ? err.message : 'unknown';
+    let detail = 'unknown';
+    if (err instanceof Error) detail = err.message;
+    else if (err && typeof err === 'object' && 'message' in err) detail = String((err as { message: unknown }).message);
+    else if (err != null) detail = String(err);
     return NextResponse.json({ error: `Failed to save key: ${detail}` }, { status: 500 });
   }
 }
@@ -180,7 +188,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Key ID required' }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { error } = await createAdminClient()
     .from('user_api_keys')
     .delete()
     .eq('id', keyId)
