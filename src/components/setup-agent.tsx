@@ -121,10 +121,23 @@ export function SetupAgent({ isOpen, onClose, missingKeys = [], projectId }: Set
     }
   };
 
+  // ESC closes the panel — standard dialog behavior.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 w-96 max-w-[92vw] max-h-[600px] flex flex-col">
+    // Height is viewport-aware (100dvh - margins) so the header — and its
+    // close button — can never slide above the top of the screen, and z-[60]
+    // keeps the panel above the sticky z-50 dashboard header.
+    <div className="fixed bottom-4 left-4 z-[60] w-96 max-w-[92vw] max-h-[min(600px,calc(100dvh-2rem))] flex flex-col">
       <Card className="flex flex-col h-full shadow-2xl border-violet-500/30">
         {/* Header */}
         <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b border-white/10">
@@ -157,7 +170,7 @@ export function SetupAgent({ isOpen, onClose, missingKeys = [], projectId }: Set
         )}
 
         {/* Messages */}
-        <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px] max-h-[400px]">
+        <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[200px]">
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[85%] rounded-lg p-3 ${
