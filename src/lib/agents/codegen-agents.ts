@@ -13,6 +13,7 @@
 import type { ProjectSpecs, ArchitectureDoc, GeneratedFile, AgentRole } from './types';
 import { hasAIKey, callAI } from './ai-client';
 import { hasLettaKey, callLettaAgent } from './letta-client';
+import { designBriefFor } from './design-briefs';
 
 // ─── Database Agent ────────────────────────────────────────────────
 
@@ -333,7 +334,7 @@ RULES:
 - Generate the pages specified in the architecture's pageRoutes list. If no routes are listed, generate: a landing page, an auth page (login+signup combined), and a main app page specific to the app's purpose.
 - EVERY page must be visually distinct and app-specific. A quote generator should have quote forms and client cards. A task manager should have kanban boards or list views. A learning platform should have course cards and progress bars. NEVER generate a generic dashboard for every app.
 - Use the app's actual name, features, and data models from the spec to populate realistic UI content — not "Item 1, Item 2" but plausible entries that make the demo feel real.
-- Design: dark theme (bg-black), Tailwind CSS, shadcn/ui patterns, rounded-xl cards, subtle borders (border-white/10), gradient accents (from-violet-500 to-fuchsia-500), proper spacing (p-6, gap-4).
+- Design: follow the DESIGN DIRECTION in the user message exactly — it defines this app's unique visual identity (colors, surfaces, type). Do not substitute your own default theme. Tailwind CSS, shadcn/ui patterns, proper spacing (p-6, gap-4).
 - Responsive: mobile-first, works on phone screens. Use grid-cols-1 md:grid-cols-2 lg:grid-cols-3 patterns.
 - Accessible: proper semantic HTML, aria-labels on interactive elements, focus states, sufficient color contrast.
 - Interactive: useState for form state, loading states on buttons, error badges, success feedback. Not just static markup.
@@ -773,9 +774,13 @@ export function buildFrontendPrompt(input: FrontendAgentInput): string {
   const routes = architecture.pageRoutes
     .map(r => `${r.path} — ${r.name} (${r.role})`)
     .join(', ');
+  const seed = `${(specs as { name?: string }).name || ''}|${specs.summary || ''}`;
+  const brief = designBriefFor(seed);
   return `Project: ${specs.summary}
 Tech stack: ${specs.techStack.frontend}
 Page routes from architecture: ${routes}
+
+${brief}
 
 Generate React page components for every route. Use Next.js 15 App Router, TypeScript, Tailwind CSS, and shadcn/ui patterns. Return JSON with a "files" array where each file has "path", "content", "agent":"frontend", "status":"generated". Keep it compact — 3-5 files maximum.`;
 }
