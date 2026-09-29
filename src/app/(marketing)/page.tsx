@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, ArrowRight, Zap, Shield, Code2, Rocket, Brain, CheckCircle2, LogOut, FileText, SearchCheck, MonitorSmartphone, Wallet, Clock, Users } from 'lucide-react';
 import { useAuth } from '@/lib/supabase/auth-context';
+import StardustBackground from '@/components/stardust';
 import { TermsGate } from '@/components/terms-gate';
 import { PlanInterview } from '@/components/plan-interview';
 
@@ -85,6 +86,7 @@ export default function LandingPage() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-900/20 via-black to-black" />
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-fuchsia-600/10 rounded-full blur-[120px] animate-pulse" />
       <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-cyan-500/10 rounded-full blur-[100px]" />
+      <StardustBackground />
 
       <div className="relative z-10">
         {/* Nav */}

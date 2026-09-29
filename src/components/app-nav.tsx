@@ -6,8 +6,9 @@ import { useAuth } from '@/lib/supabase/auth-context';
 import {
   ChevronDown, ChevronRight, Settings, LogOut, LayoutDashboard,
   ShieldCheck, LifeBuoy, Plus, FolderKanban, BookOpen, KeyRound, Megaphone,
-  Inbox,
+  Inbox, Sparkles,
 } from 'lucide-react';
+import { toggleStardust, stardustEnabled } from '@/components/stardust';
 
 interface NavProject {
   id: string;
@@ -33,6 +34,11 @@ export function AppNav() {
   const router = useRouter();
   const { user, profile, signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const [stardustOn, setStardustOn] = useState(true);
+
+  useEffect(() => {
+    setStardustOn(stardustEnabled());
+  }, [open]);
   const [appsOpen, setAppsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [expandedApp, setExpandedApp] = useState<string | null>(null);
@@ -319,6 +325,19 @@ export function AppNav() {
                 </button>
                 <button className={item} onClick={() => { setOpen(false); router.push('/setup'); }}>
                   <KeyRound className="w-4 h-4" /> API & GitHub setup
+                </button>
+                <button
+                  className={item}
+                  onClick={() => {
+                    const on = toggleStardust();
+                    setStardustOn(on);
+                  }}
+                >
+                  <Sparkles className={`w-4 h-4 ${stardustOn ? 'text-fuchsia-400' : 'text-white/30'}`} />
+                  Stardust background
+                  <span className={`ml-auto text-[10px] uppercase tracking-wide ${stardustOn ? 'text-fuchsia-400' : 'text-white/30'}`}>
+                    {stardustOn ? 'on' : 'off'}
+                  </span>
                 </button>
                 {(tier === 'starter' || tier === 'pro' || tier === 'enterprise' || isAdmin) && (
                   <a className={item} href="mailto:support@bobbie.digital?subject=BoDiGi%202.0%20support">
