@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * /settings — the product's home base.
- * Plan card (tier + upgrade/manage), your documents, feature toggles
- * gated by tier (working for yours, crowned + locked above it),
- * and a REAL accessibility section that applies site-wide.
+ * /settings — the product's home base, organized into tabs:
+ * Account (plan + email), Documents, Connections (API keys),
+ * Features (tier-gated toggles), Accessibility (site-wide prefs).
+ * Deep-linkable: /settings#connections opens that tab directly.
  */
 
 import { useEffect, useState } from 'react';
@@ -52,6 +52,7 @@ export default function SettingsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [portalBusy, setPortalBusy] = useState(false);
+  const [tab, setTab] = useState<'account' | 'documents' | 'connections' | 'features' | 'accessibility'>('account');
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
@@ -61,6 +62,14 @@ export default function SettingsPage() {
     const p = loadPrefs();
     setPrefs(p);
     applyPrefs(p);
+  }, []);
+
+  useEffect(() => {
+    // Deep links: /settings#connections etc. Keep in sync on tab change.
+    const fromHash = window.location.hash.replace('#', '');
+    if (['account', 'documents', 'connections', 'features', 'accessibility'].includes(fromHash)) {
+      setTab(fromHash as typeof tab);
+    }
   }, []);
 
   useEffect(() => {
@@ -134,6 +143,17 @@ export default function SettingsPage() {
   const card: React.CSSProperties = { border: '1px solid #222', borderRadius: '0.75rem', padding: '1.25rem 1.5rem', background: '#0a0a0a', marginBottom: '1.25rem' };
   const h2: React.CSSProperties = { color: '#fff', fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem' };
   const muted: React.CSSProperties = { color: '#777', fontSize: '0.8125rem' };
+  const TABS: Array<{ id: typeof tab; label: string }> = [
+    { id: 'account', label: 'Account' },
+    { id: 'documents', label: 'Documents' },
+    { id: 'connections', label: 'Connections' },
+    { id: 'features', label: 'Features' },
+    { id: 'accessibility', label: 'Accessibility' },
+  ];
+  const switchTab = (id: typeof tab) => {
+    setTab(id);
+    window.location.hash = id;
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#050505', padding: '2rem 1rem' }}>
@@ -143,83 +163,114 @@ export default function SettingsPage() {
           <a href="/dashboard" style={{ color: '#888', fontSize: '0.875rem', textDecoration: 'none' }}>← Dashboard</a>
         </div>
 
-        {/* ============ PLAN ============ */}
-        <div style={card}>
-          <h2 style={h2}>Your plan</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-            <span style={{ padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.8125rem', fontWeight: 700, background: `${tierColor[tier]}22`, color: tierColor[tier], border: `1px solid ${tierColor[tier]}55` }}>
-              {isAdmin ? 'Admin' : tierLabel[tier]}
-            </span>
-            {tier === 'free' && !isAdmin && (
-              <span style={muted}>Preview expires in 7 days — upgrade to keep your app forever.</span>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap' }}>
-            {!isAdmin && tier !== 'enterprise' && (
-              <a href="/pricing" style={{ padding: '0.625rem 1.25rem', borderRadius: '0.5rem', background: 'linear-gradient(135deg,#7c3aed,#c026d3)', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: '0.875rem' }}>
-                {tier === 'free' ? 'Upgrade' : 'Change plan'}
-              </a>
-            )}
-            {(tier !== 'free' || isAdmin) && (
-              <button onClick={openPortal} disabled={portalBusy} style={{ padding: '0.625rem 1.25rem', borderRadius: '0.5rem', background: '#161616', color: '#ddd', border: '1px solid #2a2a2a', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
-                {portalBusy ? 'Opening…' : 'Manage billing'}
-              </button>
-            )}
-          </div>
+        {/* ============ TAB BAR ============ */}
+        <div style={{ display: 'flex', gap: '0.375rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          {TABS.map((t) => (
+            <button key={t.id} onClick={() => switchTab(t.id)} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: `1px solid ${tab === t.id ? '#7c3aed' : '#1e1e1e'}`, background: tab === t.id ? '#7c3aed22' : '#0a0a0a', color: tab === t.id ? '#c4b5fd' : '#888', fontSize: '0.8125rem', fontWeight: tab === t.id ? 700 : 500, cursor: 'pointer' }}>
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        {/* ============ DOCUMENTS ============ */}
-        <div style={card}>
-          <h2 style={h2}>Your documents</h2>
-          {projects.length === 0 ? (
-            <div style={muted}>No builds yet — your README, Investor One-Pager, Reality Check, and Marketing Kit will appear here after your first build.</div>
-          ) : (
-            projects.map((p) => (
-              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.625rem 0', borderBottom: '1px solid #161616' }}>
-                <div>
-                  <div style={{ color: '#e5e5e5', fontSize: '0.875rem', fontWeight: 600 }}>{p.name}</div>
-                  <div style={{ ...muted, fontSize: '0.75rem' }}>{new Date(p.created_at).toLocaleDateString()} · {p.status}</div>
+        {tab === 'account' && (
+          <>
+          {/* ============ PLAN ============ */}
+          <div style={card}>
+            <h2 style={h2}>Your plan</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+              <span style={{ padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.8125rem', fontWeight: 700, background: `${tierColor[tier]}22`, color: tierColor[tier], border: `1px solid ${tierColor[tier]}55` }}>
+                {isAdmin ? 'Admin' : tierLabel[tier]}
+              </span>
+              {tier === 'free' && !isAdmin && (
+                <span style={muted}>Preview expires in 7 days — upgrade to keep your app forever.</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap' }}>
+              {!isAdmin && tier !== 'enterprise' && (
+                <a href="/pricing" style={{ padding: '0.625rem 1.25rem', borderRadius: '0.5rem', background: 'linear-gradient(135deg,#7c3aed,#c026d3)', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: '0.875rem' }}>
+                  {tier === 'free' ? 'Upgrade' : 'Change plan'}
+                </a>
+              )}
+              {(tier !== 'free' || isAdmin) && (
+                <button onClick={openPortal} disabled={portalBusy} style={{ padding: '0.625rem 1.25rem', borderRadius: '0.5rem', background: '#161616', color: '#ddd', border: '1px solid #2a2a2a', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+                  {portalBusy ? 'Opening…' : 'Manage billing'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ============ ACCOUNT ============ */}
+          <div style={card}>
+            <h2 style={h2}>Account</h2>
+            <div style={{ ...muted, marginBottom: '0.5rem' }}>{user.email}</div>
+            <div style={{ display: 'flex', gap: '0.875rem' }}>
+              <a href="/forgot-password" style={{ ...muted, color: '#a78bfa', textDecoration: 'none' }}>Reset password</a>
+            </div>
+          </div>
+          </>
+        )}
+
+        {tab === 'documents' && (
+          <div style={card}>
+            <h2 style={h2}>Your documents</h2>
+            {projects.length === 0 ? (
+              <div style={muted}>No builds yet — your README, Investor One-Pager, Reality Check, and Marketing Kit will appear here after your first build.</div>
+            ) : (
+              projects.map((p) => (
+                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.625rem 0', borderBottom: '1px solid #161616' }}>
+                  <div>
+                    <div style={{ color: '#e5e5e5', fontSize: '0.875rem', fontWeight: 600 }}>{p.name}</div>
+                    <div style={{ ...muted, fontSize: '0.75rem' }}>{new Date(p.created_at).toLocaleDateString()} · {p.status}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <a href={`/preview/${p.id}`} style={{ ...muted, color: '#a78bfa', textDecoration: 'none' }}>Preview & docs</a>
+                    {(has('starter')) && (
+                      <a href={`/api/generate/${p.id}/download`} style={{ ...muted, color: '#67e8f9', textDecoration: 'none' }}>ZIP</a>
+                    )}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <a href={`/preview/${p.id}`} style={{ ...muted, color: '#a78bfa', textDecoration: 'none' }}>Preview & docs</a>
-                  {(has('starter')) && (
-                    <a href={`/api/generate/${p.id}/download`} style={{ ...muted, color: '#67e8f9', textDecoration: 'none' }}>ZIP</a>
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === 'connections' && (
+          <div style={card}>
+            <h2 style={h2}>API keys &amp; connections</h2>
+            <ApiKeysSection projects={projects.map((p) => ({ id: p.id, name: p.name }))} />
+          </div>
+        )}
+
+        {tab === 'features' && (
+          <div style={card}>
+            <h2 style={h2}>Features</h2>
+            <div style={{ ...muted, marginBottom: '0.75rem' }}>What's on for your plan — and what unlocks above it.</div>
+            {features.map((f) => {
+              const unlocked = has(f.need);
+              return (
+                <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', padding: '0.625rem 0', borderBottom: '1px solid #161616', opacity: unlocked ? 1 : 0.55 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: unlocked ? '#e5e5e5' : '#999', fontSize: '0.875rem', fontWeight: 600 }}>
+                      {f.name} {!unlocked && '👑'} {!f.live && unlocked && <span style={{ ...muted, fontSize: '0.75rem' }}>(coming soon)</span>}
+                    </div>
+                    <div style={{ ...muted, fontSize: '0.75rem' }}>{f.desc}</div>
+                  </div>
+                  {unlocked ? (
+                    <span style={{ width: '2.5rem', height: '1.375rem', borderRadius: '999px', background: f.live ? '#7c3aed' : '#333', position: 'relative', flexShrink: 0 }}>
+                      <span style={{ position: 'absolute', top: '0.1875rem', left: f.live ? '1.25rem' : '0.25rem', width: '1rem', height: '1rem', borderRadius: '50%', background: '#fff' }} />
+                    </span>
+                  ) : (
+                    <a href="/pricing" style={{ padding: '0.375rem 0.75rem', borderRadius: '0.5rem', background: '#161616', border: '1px solid #333', color: '#c084fc', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none', flexShrink: 0 }}>
+                      {tierLabel[f.need]} 👑
+                    </a>
                   )}
                 </div>
-              </div>
-            ))
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
-        {/* ============ FEATURES ============ */}
-        <div style={card}>
-          <h2 style={h2}>Features</h2>
-          <div style={{ ...muted, marginBottom: '0.75rem' }}>What's on for your plan — and what unlocks above it.</div>
-          {features.map((f) => {
-            const unlocked = has(f.need);
-            return (
-              <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', padding: '0.625rem 0', borderBottom: '1px solid #161616', opacity: unlocked ? 1 : 0.55 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: unlocked ? '#e5e5e5' : '#999', fontSize: '0.875rem', fontWeight: 600 }}>
-                    {f.name} {!unlocked && '👑'} {!f.live && unlocked && <span style={{ ...muted, fontSize: '0.75rem' }}>(coming soon)</span>}
-                  </div>
-                  <div style={{ ...muted, fontSize: '0.75rem' }}>{f.desc}</div>
-                </div>
-                {unlocked ? (
-                  <span style={{ width: '2.5rem', height: '1.375rem', borderRadius: '999px', background: f.live ? '#7c3aed' : '#333', position: 'relative', flexShrink: 0 }}>
-                    <span style={{ position: 'absolute', top: '0.1875rem', left: f.live ? '1.25rem' : '0.25rem', width: '1rem', height: '1rem', borderRadius: '50%', background: '#fff' }} />
-                  </span>
-                ) : (
-                  <a href="/pricing" style={{ padding: '0.375rem 0.75rem', borderRadius: '0.5rem', background: '#161616', border: '1px solid #333', color: '#c084fc', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none', flexShrink: 0 }}>
-                    {tierLabel[f.need]} 👑
-                  </a>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* ============ ACCESSIBILITY ============ */}
+        {tab === 'accessibility' && (
         <div style={card}>
           <h2 style={h2}>Accessibility</h2>
           <div style={{ ...muted, marginBottom: '0.75rem' }}>Applies across BoDiGi immediately, saved on this device.</div>
@@ -255,22 +306,7 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-
-        {/* ============ ACCOUNT ============ */}
-        {/* ============ API KEYS & CONNECTIONS ============ */}
-        <div style={card}>
-          <h2 style={h2}>API keys &amp; connections</h2>
-          <ApiKeysSection projects={projects.map((p) => ({ id: p.id, name: p.name }))} />
-        </div>
-
-        <div style={card}>
-          <h2 style={h2}>Account</h2>
-          <div style={{ ...muted, marginBottom: '0.5rem' }}>{user.email}</div>
-          <div style={{ display: 'flex', gap: '0.875rem' }}>
-            <a href="/forgot-password" style={{ ...muted, color: '#a78bfa', textDecoration: 'none' }}>Reset password</a>
-            <a href="/setup" style={{ ...muted, color: '#a78bfa', textDecoration: 'none' }}>API keys & connections</a>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

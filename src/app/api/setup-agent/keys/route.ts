@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/server';
 import { encrypt } from '@/lib/encryption';
+import { decrypt } from '@/lib/encryption';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 
 function maskKey(key: string): string {
@@ -199,4 +200,155 @@ export async function DELETE(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true });
+}
+
+/**
+ * POST /api/setup-agent/keys/test — validate a stored key against its provider.
+ * Body: { keyId }  →  { valid, message }
+ *
+ * Decrypts the stored key server-side (never leaves the server), pings the
+ * provider with a cheap authenticated call, and updates is_valid/last_checked.
+ */
+export async function PUT(request: NextRequest) {
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  const rl = rateLimit(getClientId(request, user.id), RATE_LIMITS.keyTest);
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'Too many key tests. Try again in a few minutes.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } }
+    );
+  }
+
+  const { keyId } = await request.json();
+  if (!keyId) {
+    return NextResponse.json({ error: 'Key ID required' }, { status: 400 });
+  }
+
+  // Fetch + decrypt server-side. Admin client because table RLS has no
+  // SELECT policy for user rows (writes already go through the service role).
+  const db = createAdminClient();
+  const { data: row, error: fetchError } = await db
+    .from('user_api_keys')
+    .select('id, provider, key_name, key_value_encrypted')
+    .eq('id', keyId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (fetchError || !row) {
+    return NextResponse.json({ error: 'Key not found' }, { status: 404 });
+  }
+
+  let value: string;
+  try {
+    value = decrypt(row.key_value_encrypted);
+  } catch {
+    return NextResponse.json({ valid: false, message: 'Stored key could not be decrypted — remove and re-add it.' }, { status: 200 });
+  }
+
+  const result = await testKey(row.provider, row.key_name, value);
+
+  await db
+    .from('user_api_keys')
+    .update({ is_valid: result.valid, last_checked: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', keyId)
+    .eq('user_id', user.id);
+
+  return NextResponse.json(result);
+}
+
+/**
+ * Cheap authenticated ping per provider. Returns valid + a human message.
+ * Never returns the key. Timeouts are short so a hung provider doesn't
+ * hang the settings page.
+ */
+async function testKey(provider: string, keyName: string, value: string): Promise<{ valid: boolean; message: string }> {
+  const timeout = (ms: number) => {
+    const c = new AbortController();
+    setTimeout(() => c.abort(), ms);
+    return c.signal;
+  };
+
+  try {
+    switch (provider) {
+      case 'telnyx': {
+        // Balance endpoint is the cheapest authenticated call Telnyx has.
+        const res = await fetch('https://api.telnyx.com/v2/balance', {
+          headers: { Authorization: `Bearer ${value}` },
+          signal: timeout(8000),
+        });
+        if (res.ok) return { valid: true, message: 'Telnyx accepted the key — balance endpoint responded.' };
+        if (res.status === 403) return { valid: false, message: 'Telnyx rejected the key (403). If your balance is $0, top up the wallet — Telnyx reports empty balance as a 403, not an auth error.' };
+        return { valid: false, message: `Telnyx responded ${res.status}.` };
+      }
+      case 'supabase': {
+        if (keyName.toLowerCase().includes('url')) {
+          // URL "key": just check the project responds.
+          const res = await fetch(`${value.replace(/\/$/, '')}/rest/v1/`, {
+            headers: { apikey: 'ping' },
+            signal: timeout(8000),
+          });
+          // Any structured response (even 401) means the project is live.
+          return res.status === 404
+            ? { valid: false, message: 'Project URL did not respond — check it is your Supabase Project URL.' }
+            : { valid: true, message: 'Supabase project is live and responding.' };
+        }
+        // Service/anon key: ping the platform's own REST root with it.
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (!url) return { valid: false, message: 'Cannot verify Supabase keys on this deployment (missing platform URL).' };
+        const res = await fetch(`${url}/rest/v1/`, {
+          headers: { apikey: value },
+          signal: timeout(8000),
+        });
+        if (res.ok) return { valid: true, message: 'Supabase accepted the key.' };
+        return { valid: false, message: `Supabase rejected the key (${res.status}).` };
+      }
+      case 'github': {
+        const res = await fetch('https://api.github.com/user', {
+          headers: { Authorization: `Bearer ${value}`, Accept: 'application/vnd.github+json' },
+          signal: timeout(8000),
+        });
+        if (res.ok) return { valid: true, message: 'GitHub accepted the token.' };
+        if (res.status === 401) return { valid: false, message: 'GitHub rejected the token — it may be expired or revoked. Generate a new one.' };
+        return { valid: false, message: `GitHub responded ${res.status}.` };
+      }
+      case 'vercel': {
+        const res = await fetch('https://api.vercel.com/v2/user', {
+          headers: { Authorization: `Bearer ${value}` },
+          signal: timeout(8000),
+        });
+        if (res.ok) return { valid: true, message: 'Vercel accepted the token.' };
+        return { valid: false, message: `Vercel rejected the token (${res.status}).` };
+      }
+      case 'openai': {
+        const res = await fetch('https://api.openai.com/v1/models', {
+          headers: { Authorization: `Bearer ${value}` },
+          signal: timeout(8000),
+        });
+        if (res.ok) return { valid: true, message: 'OpenAI accepted the key.' };
+        if (res.status === 401) return { valid: false, message: 'OpenAI rejected the key — check it is a valid sk- key.' };
+        return { valid: false, message: `OpenAI responded ${res.status}.` };
+      }
+      case 'anthropic': {
+        const res = await fetch('https://api.anthropic.com/v1/models', {
+          headers: { 'x-api-key': value, 'anthropic-version': '2023-06-01' },
+          signal: timeout(8000),
+        });
+        if (res.ok) return { valid: true, message: 'Anthropic accepted the key.' };
+        return { valid: false, message: `Anthropic responded ${res.status}.` };
+      }
+      default:
+        return { valid: true, message: 'Custom key stored — no automated test for this provider. It will be checked when your app uses it.' };
+      }
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      return { valid: false, message: 'Provider did not respond in time — could be a network hiccup. Try again.' };
+    }
+    return { valid: false, message: 'Could not reach the provider to test this key.' };
+  }
 }

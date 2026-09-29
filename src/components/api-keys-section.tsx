@@ -5,6 +5,10 @@
  * One place to see every stored key across all projects: provider,
  * name, validity, last checked — with add/remove inline.
  * Backed by /api/setup-agent/keys (encrypted at rest, never displayed).
+ *
+ * This is the home for ACCOUNT-WIDE keys (used by every app). Keys saved
+ * on a project's own panel are per-app and show here only when that app
+ * is selected — see the copy below.
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -43,6 +47,7 @@ export function ApiKeysSection({ projects }: { projects: Project[] }) {
   const [newProject, setNewProject] = useState('');
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [testingId, setTestingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -87,7 +92,11 @@ export function ApiKeysSection({ projects }: { projects: Project[] }) {
     setBusy(true);
     setFeedback('');
     try {
-      const res = await fetch(`/api/setup-agent/keys?id=${id}`, { method: 'DELETE' });
+      const res = await fetch('/api/setup-agent/keys', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyId: id }),
+      });
       if (!res.ok) throw new Error('Failed to delete key');
       setFeedback('Key removed.');
       await load();
@@ -95,6 +104,26 @@ export function ApiKeysSection({ projects }: { projects: Project[] }) {
       setFeedback(err instanceof Error ? err.message : 'Failed to delete key');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const testKey = async (id: string) => {
+    setTestingId(id);
+    setFeedback('');
+    try {
+      const res = await fetch('/api/setup-agent/keys', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyId: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Test failed');
+      setFeedback(data.message || (data.valid ? 'Key works.' : 'Key failed the test.'));
+      await load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Test failed');
+    } finally {
+      setTestingId(null);
     }
   };
 
@@ -113,7 +142,8 @@ export function ApiKeysSection({ projects }: { projects: Project[] }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
         <p style={{ margin: 0, color: '#888', fontSize: '0.8125rem' }}>
-          Keys for your apps and connections — encrypted at rest, never displayed in full.
+          Account-wide keys for your apps — encrypted at rest, never displayed in full.
+          Keys saved on a specific app's dashboard are per-app and won't appear here.
         </p>
         <button
           onClick={() => setShowAdd(!showAdd)}
@@ -149,8 +179,24 @@ export function ApiKeysSection({ projects }: { projects: Project[] }) {
       ) : error ? (
         <div style={{ color: '#f87171', fontSize: '0.875rem' }}>{error}</div>
       ) : keys.length === 0 ? (
-        <div style={{ color: '#666', fontSize: '0.875rem' }}>
-          No keys stored yet. Add your first key above — Telnyx (AI), Supabase (database), Vercel (hosting), GitHub (export).
+        <div style={{ padding: '1rem', background: '#0d0d0d', border: '1px solid #222', borderRadius: '0.625rem' }}>
+          <div style={{ color: '#e5e5e5', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.375rem' }}>No keys stored yet</div>
+          <div style={{ color: '#888', fontSize: '0.8125rem', marginBottom: '0.75rem' }}>
+            Your apps run on <strong style={{ color: '#c4b5fd' }}>your own keys</strong> — that's what keeps your plan cheap.
+            Start with the two every app needs:
+          </div>
+          <div style={{ color: '#999', fontSize: '0.8125rem', marginBottom: '0.75rem', lineHeight: 1.6 }}>
+            <div>⚡ <strong style={{ color: '#e5e5e5' }}>Telnyx</strong> — the AI that builds your app (<a href="https://portal.telnyx.com" target="_blank" rel="noreferrer" style={{ color: '#a78bfa' }}>get a key ↗</a>)</div>
+            <div>🗄️ <strong style={{ color: '#e5e5e5' }}>Supabase</strong> — your app's database (<a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" style={{ color: '#a78bfa' }}>get a key ↗</a>)</div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button onClick={() => setShowAdd(true)} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', background: 'linear-gradient(135deg,#7c3aed,#c026d3)', color: '#fff', fontWeight: 600, fontSize: '0.8125rem', border: 'none', cursor: 'pointer' }}>
+              + Add your first key
+            </button>
+            <a href="/setup" style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', background: '#161616', border: '1px solid #2a2a2a', color: '#c4b5fd', fontWeight: 600, fontSize: '0.8125rem', textDecoration: 'none' }}>
+              Step-by-step guide
+            </a>
+          </div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -167,6 +213,9 @@ export function ApiKeysSection({ projects }: { projects: Project[] }) {
               <span style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, background: k.isValid ? 'rgba(34,197,94,0.12)' : 'rgba(248,113,113,0.12)', color: k.isValid ? '#4ade80' : '#f87171', border: `1px solid ${k.isValid ? 'rgba(34,197,94,0.3)' : 'rgba(248,113,113,0.3)'}` }}>
                 {k.isValid ? 'Valid' : 'Invalid'}
               </span>
+              <button onClick={() => testKey(k.id)} disabled={testingId === k.id || busy} style={{ background: 'none', border: '1px solid #2a2a2a', borderRadius: '0.375rem', color: '#999', fontSize: '0.7rem', cursor: 'pointer', padding: '0.2rem 0.6rem' }}>
+                {testingId === k.id ? 'Testing…' : 'Test'}
+              </button>
               <button onClick={() => removeKey(k.id)} disabled={busy} style={{ background: 'none', border: 'none', color: '#a33', fontSize: '0.75rem', cursor: 'pointer', padding: '0.25rem 0.5rem' }}>
                 Remove
               </button>
