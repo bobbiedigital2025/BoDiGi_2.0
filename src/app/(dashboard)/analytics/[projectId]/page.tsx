@@ -242,7 +242,7 @@ export default function AnalyticsPage({ params }: { params: Promise<{ projectId:
           )}
           <Badge variant={data.ai?.connected ? 'success' : 'warning'} className="text-xs">
             {data.ai?.connected ? <Zap className="w-3 h-3 mr-1" /> : <ZapOff className="w-3 h-3 mr-1" />}
-            Telnyx: {data.ai?.connected ? data.ai.model : 'offline'}
+            {(data.ai as { label?: string })?.label || 'AI'}: {data.ai?.connected ? data.ai.model : 'offline'}
           </Badge>
           <Badge variant={state.status === 'done' ? 'success' : state.status === 'failed' ? 'error' : 'info'}>
             {state.status}

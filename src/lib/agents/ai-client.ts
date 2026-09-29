@@ -50,9 +50,9 @@ export function hasAIKey(): boolean {
 }
 
 /** AI connection status for display in the dashboard. */
-export function getAIStatus(): { connected: boolean; model: string } {
+export function getAIStatus(): { connected: boolean; model: string; label: string } {
   const p = getProvider();
-  return { connected: p !== null, model: p ? p.model : 'none' };
+  return { connected: p !== null, model: p ? p.model : 'none', label: p ? p.label : 'AI' };
 }
 
 /**

@@ -520,8 +520,17 @@ export class AppForgeOrchestrator {
         break;
       case 'docs':
         this.state.currentPhase = 6;
-        this.state.status = 'done';
-        this.ensureScaffoldFiles();
+        // Never report success on an empty build — a "done" project with
+        // zero generated files is a silent death (the BioStack pattern:
+        // status done, 0 files, user downloads an empty shell). Fail loudly
+        // so the owner sees it and retries instead.
+        if (this.state.generatedFiles.length === 0) {
+          this.log('docs', 'error', 'Build produced zero files — failing visibly instead of reporting success. Retry the build; if it repeats, check AI provider keys and credits.');
+          this.state.status = 'failed';
+        } else {
+          this.state.status = 'done';
+          this.ensureScaffoldFiles();
+        }
         break;
       case 'healing': {
         // Healing completed — re-queue the originally failed task with the

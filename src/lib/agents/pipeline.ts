@@ -334,6 +334,16 @@ Rules: rate limits and timeouts ARE retriable (retry with backoff). AI parse err
       );
     }
       ranAny = true;
+
+    // Persist after every task — fire-and-forget. Without this, the only
+    // writes were create-time and final-state, so a serverless freeze
+    // mid-build left project_tasks frozen at 'pending' forever even though
+    // they completed (the "tasks never flip to done" quirk), and the
+    // dashboard saw a dead build.
+    if (userId && hasSupabase()) {
+      saveProject(userId, projectId, orchestrator.getState(), project.files, orchestrator.getProgress())
+        .catch((err) => console.error('Incremental project save failed:', err));
+    }
     }
 
     // Nothing ran this pass — all tasks are completed, failed, or waiting

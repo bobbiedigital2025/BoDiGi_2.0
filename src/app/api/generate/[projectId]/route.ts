@@ -9,6 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProject, getProjectFromSupabase } from '@/lib/agents/pipeline';
 import { createServerClient } from '@/lib/supabase/server-client';
+import { getAIStatus } from '@/lib/agents/ai-client';
+import { hasLettaKey } from '@/lib/agents/letta-client';
 
 /**
  * PATCH /api/generate/[projectId] — rename a project.
@@ -94,8 +96,10 @@ export async function GET(
       progress: stored.progress,
       agentActivity: {},
       files: stored.files,
-      ai: { configured: false, model: null },
-      letta: { configured: false, agents: 0 },
+      // Real provider status — hardcoded false used to make every badge
+      // read "offline" on completed projects even with services healthy.
+      ai: getAIStatus(),
+      letta: { connected: hasLettaKey(), model: hasLettaKey() ? 'Letta Cloud' : 'offline' },
       testResults: null,
       complianceChecks: null,
     });
