@@ -14,6 +14,7 @@ import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase } from '@/lib/supabase/project-store';
 import { createServerClient } from '@/lib/supabase/server-client';
 import type { ProjectState, GeneratedFile } from '@/lib/agents/types';
+import { ensureExportScaffold } from '@/lib/agents/export-scaffold';
 
 export async function GET(
   request: NextRequest,
@@ -73,6 +74,10 @@ export async function GET(
   if (!files || files.length === 0) {
     return NextResponse.json({ error: 'No files generated yet' }, { status: 400 });
   }
+
+  // Export is the last line of defense for pre-scaffold-guarantee builds:
+  // no project leaves BoDiGi without package.json/tsconfig/.gitignore.
+  files = ensureExportScaffold(projectName, files);
 
   const zip = new JSZip();
 

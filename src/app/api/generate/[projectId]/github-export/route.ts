@@ -13,6 +13,7 @@ import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase } from '@/lib/supabase/project-store';
 import type { GeneratedFile } from '@/lib/agents/types';
+import { ensureExportScaffold } from '@/lib/agents/export-scaffold';
 
 const GH_API = 'https://api.github.com';
 
@@ -103,6 +104,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (files.length === 0) {
     return NextResponse.json({ error: 'No files to export yet — wait for the build to finish.' }, { status: 400 });
   }
+
+  // Export is the last line of defense for pre-scaffold-guarantee builds:
+  // no project leaves BoDiGi without package.json/tsconfig/.gitignore.
+  files = ensureExportScaffold(projectName, files);
 
   // 3. Get the user's stored GitHub token
   const { data: keyRow } = await supabase
