@@ -1,104 +1,21 @@
 'use client';
 
 /**
- * BuildFlowBar — the guided conveyor belt after a build.
- *
- * Bobbie (Sept 29 2026): "it needs to be a smooth workflow in the app —
- * it should push the customer to the next task, not just sit on that
- * build page. There should be a next button at the bottom and it takes
- * them to setup, then next to deploy."
- *
- * Three steps, always visible once you land on a project:
- *   1. ✨ Build    — the pipeline (this page)
- *   2. 🔑 Configure — required API keys (same page, scrolls to the panel)
- *   3. 🚀 Deploy   — the preview page's deploy card
- *
- * The bar computes the current step from build status + saved keys and
- * shows one big honest CTA for what to do next.
+ * BuildFlowBar — the guided conveyor belt at the bottom of the project page.
+ * Journey state comes from useProjectFlow (shared with the header menu).
  */
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { Check, Sparkles, KeyRound, Rocket, ArrowRight, Loader2, PartyPopper } from 'lucide-react';
+import type { ProjectFlow } from './use-project-flow';
 
-interface RequiredApi {
-  provider: string;
-  envVars: string[];
-  required: boolean;
-}
+const steps = [
+  { n: 1, label: 'Build', icon: Sparkles },
+  { n: 2, label: 'Configure', icon: KeyRound },
+  { n: 3, label: 'Deploy', icon: Rocket },
+];
 
-interface SavedKey {
-  provider: string;
-  key_name: string;
-}
-
-export default function BuildFlowBar({
-  projectId,
-  status,
-  requiredApis,
-  deploymentUrl,
-}: {
-  projectId: string;
-  status: string;
-  requiredApis?: RequiredApi[];
-  deploymentUrl?: string | null;
-}) {
-  const router = useRouter();
-  const [saved, setSaved] = useState<SavedKey[]>([]);
-  const [loaded, setLoaded] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/setup-agent/keys?projectId=${projectId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSaved(data.keys || []);
-      }
-    } catch { /* keep last known state */ }
-    setLoaded(true);
-  }, [projectId]);
-
-  useEffect(() => {
-    refresh();
-    // Re-check when a key saves anywhere on the page, and on window focus
-    // (users paste keys in the panel above, sometimes in another tab).
-    const onSaved = () => refresh();
-    const onFocus = () => refresh();
-    window.addEventListener('bodigi-keys-saved', onSaved);
-    window.addEventListener('focus', onFocus);
-    return () => {
-      window.removeEventListener('bodigi-keys-saved', onSaved);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [refresh]);
-
-  const buildDone = status === 'done';
-  const required = (requiredApis || []).filter(a => a.required !== false);
-  const missing = required.flatMap(a =>
-    a.envVars.filter(v => !saved.some(k => k.provider.toLowerCase() === a.provider.toLowerCase() && k.key_name === v))
-      .map(v => `${a.provider}:${v}`)
-  );
-  const keysDone = loaded && missing.length === 0;
-
-  const deployed = !!deploymentUrl;
-
-  // Step: 1 building, 2 needs keys, 3 ready to deploy, 4 live
-  const step = !buildDone ? 1 : !keysDone ? 2 : !deployed ? 3 : 4;
-
-  const goToKeys = () => {
-    const el = document.getElementById('api-keys');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('ring-2', 'ring-fuchsia-400', 'rounded-xl');
-      setTimeout(() => el.classList.remove('ring-2', 'ring-fuchsia-400'), 2500);
-    }
-  };
-
-  const steps = [
-    { n: 1, label: 'Build', icon: Sparkles },
-    { n: 2, label: 'Configure', icon: KeyRound },
-    { n: 3, label: 'Deploy', icon: Rocket },
-  ];
+export default function BuildFlowBar({ flow }: { flow: ProjectFlow }) {
+  const { step, missingCount, deploymentUrl, goToKeys, goToDeploy } = flow;
 
   return (
     <div className="fixed bottom-0 inset-x-0 z-40 pointer-events-none">
@@ -140,13 +57,13 @@ export default function BuildFlowBar({
                 className="w-full flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 transition shadow-lg shadow-fuchsia-600/20"
               >
                 Next: add your API keys
-                <span className="text-white/60 font-normal">({missing.length} left)</span>
+                <span className="text-white/60 font-normal">({missingCount} left)</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}
             {step === 3 && (
               <button
-                onClick={() => router.push(`/preview/${projectId}`)}
+                onClick={goToDeploy}
                 className="w-full flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 transition shadow-lg shadow-fuchsia-600/20"
               >
                 Next: deploy your app — it&apos;s ready
@@ -165,7 +82,7 @@ export default function BuildFlowBar({
                   View your working application
                 </a>
                 <button
-                  onClick={() => router.push(`/preview/${projectId}`)}
+                  onClick={goToDeploy}
                   className="text-xs text-white/40 hover:text-white/70 transition shrink-0"
                   title="Redeploy or manage"
                 >

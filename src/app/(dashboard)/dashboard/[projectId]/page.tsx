@@ -14,6 +14,8 @@ import {
 import { SetupAgent } from '@/components/setup-agent';
 import AppKeysPanel from '@/components/app-keys';
 import BuildFlowBar from '@/components/build-flow-bar';
+import ProjectJourneyMenu from '@/components/project-journey-menu';
+import { useProjectFlow } from '@/components/use-project-flow';
 import { agentName } from '@/lib/agents/types';
 
 interface AgentActivity {
@@ -211,6 +213,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
   }
 
   const { state, progress, agentActivity } = data;
+  const flow = useProjectFlow(projectId, state.status, state.specs?.requiredApis, data.deploymentUrl);
 
   return (
     <div className="min-h-screen bg-black text-white pb-24">
@@ -268,6 +271,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
           </div>
         </div>
         <div className="flex items-center gap-4">
+          <ProjectJourneyMenu projectId={projectId} flow={flow} />
           {data.ai && (
             <Badge variant={data.ai.connected ? 'success' : 'warning'} className="text-xs">
               {data.ai.connected ? <Zap className="w-3 h-3 mr-1" /> : <ZapOff className="w-3 h-3 mr-1" />}
@@ -765,7 +769,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
       />
 
       {/* Guided flow: Build → Configure → Deploy */}
-      <BuildFlowBar projectId={projectId} status={state.status} requiredApis={state.specs?.requiredApis} deploymentUrl={data.deploymentUrl} />
+      <BuildFlowBar flow={flow} />
     </div>
   );
 }
