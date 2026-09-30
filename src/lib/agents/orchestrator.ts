@@ -22,6 +22,8 @@ import type {
   LogEntry,
 } from './types';
 import { AGENT_ROLES } from './types';
+import { ensureImportIntegrity } from './import-integrity';
+import { ensureStylingScaffold } from './styling-scaffold';
 
 const DEFAULT_CONFIG: OrchestratorConfig = {
   maxConcurrentAgents: 5,
@@ -435,6 +437,48 @@ export class AppForgeOrchestrator {
     if (!has('.gitignore')) {
       add('.gitignore', ['node_modules', '.next', '.env*.local', '.vercel', '*.tsbuildinfo', 'next-env.d.ts', ''].join('\n'));
     }
+    // Styling backbone: the design personality must exist as real CSS,
+    // not just prompt words. Same seed as the codegen design brief so the
+    // CSS skin matches the direction the agent was given.
+    const stylingSeed = `${this.state.name}|${(this.state.specs as { summary?: string } | null)?.summary || ''}`;
+    ensureStylingScaffold(stylingSeed, this.state.generatedFiles, (msg) => this.log('devops', 'info', msg));
+
+    // Import integrity: any module imported but never written gets a typed
+    // stub, so the file set compiles no matter what an agent missed.
+    ensureImportIntegrity(this.state.generatedFiles, (msg) => this.log('devops', 'warn', msg));
+
+    // Root layout/page are required by Next conventions (nothing imports
+    // them, so the integrity pass can't see them). Guarantee them too.
+    if (!has('src/app/layout.tsx')) {
+      add('src/app/layout.tsx', `import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
+
+export const metadata: Metadata = {
+  title: '${this.state.name.replace(/'/g, "")}',
+  description: 'Built with BoDiGi 2.0',
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+`);
+    }
+    if (!has('src/app/page.tsx')) {
+      add('src/app/page.tsx', `export default function Home() {
+  return (
+    <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>
+      <h1>${this.state.name.replace(/'/g, "")}</h1>
+      <p>Built with BoDiGi 2.0</p>
+    </main>
+  );
+}
+`);
+    }
+
   }
 
   private triggerHealing(failedTask: AgentTask, error: string): void {

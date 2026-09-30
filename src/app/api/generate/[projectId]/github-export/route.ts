@@ -77,6 +77,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // ZIP download: in-memory first, then Supabase (files live in project_files)
   const inMemory = getProject(projectId);
   let projectName: string;
+  let specSummary = '';
   let files: GeneratedFile[];
 
   if (inMemory) {
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
     projectName = sbProject.state.name;
+    specSummary = (sbProject.state.specs as { summary?: string } | null)?.summary || '';
     files = sbProject.files || [];
   }
 
@@ -107,7 +109,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // Export is the last line of defense for pre-scaffold-guarantee builds:
   // no project leaves BoDiGi without package.json/tsconfig/.gitignore.
-  files = ensureExportScaffold(projectName, files);
+  files = ensureExportScaffold(projectName, files, `${projectName}|${specSummary}`);
 
   // 3. Get the user's stored GitHub token
   const { data: keyRow } = await supabase

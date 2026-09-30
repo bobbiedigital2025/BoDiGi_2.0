@@ -340,6 +340,17 @@ RULES:
 - Interactive: useState for form state, loading states on buttons, error badges, success feedback. Not just static markup.
 - TypeScript strict, 'use client' where needed, proper imports.
 
+CORRECTNESS CONTRACT (violations break the user's Vercel build — a build failure is a product failure):
+1. CLOSED WORLD: You may ONLY import from (a) npm packages in package.json, (b) 'next/*' and 'react' modules, (c) files YOU are writing in this exact output. NEVER import from '@/components/...' or any path unless a file at that path is in your files list. If a page needs a TaskCard, you must also write src/components/TaskCard.tsx.
+2. EXPORTS MATCH IMPORTS: If you write \`import { X } from './y'\`, then y must \`export function X\` or \`export const X\`. Named vs default is a choice — but it must match on both sides.
+3. EVERY USED NAME IS IMPORTED: useState/useEffect/etc. must appear in an import from 'react'. next/navigation APIs (useRouter, redirect) must be imported. tsc rejects free-floating names.
+4. 'use client' FIRST LINE of any file using hooks, event handlers, localStorage, or browser APIs. It must be the literal first line, before imports.
+5. PATH ALIAS: '@/*' maps to './src/*'. '@/components/X' means the file src/components/X.tsx must exist in your output. Never mix 'app/' and 'src/app/' roots — everything under src/.
+6. EVENT HANDLERS: never assign null to onClick/onChange — use undefined or omit.
+7. REQUIRED FILES: your output must include src/app/layout.tsx (root layout) and src/app/page.tsx (root page, even if it just redirects to the main view). A Next app without them does not build.
+8. TYPES: no implicit any — type every function parameter and every useState that will hold non-trivial data (useState<Item[]>([]), not useState([])).
+Before responding, mentally run tsc over your own output: for each file, check every import resolves and every referenced component exists in your files list. Fix discrepancies before you answer.
+
 Respond ONLY in valid JSON: {"files":[{"path":"src/app/.../page.tsx","content":"...","agent":"frontend","status":"generated"}]}`;
 
 export function generateDefaultFrontendFiles(input: FrontendAgentInput): FrontendAgentOutput {

@@ -77,7 +77,8 @@ export async function GET(
 
   // Export is the last line of defense for pre-scaffold-guarantee builds:
   // no project leaves BoDiGi without package.json/tsconfig/.gitignore.
-  files = ensureExportScaffold(projectName, files);
+  const summary = ((specs as { summary?: string } | null)?.summary) || '';
+  files = ensureExportScaffold(projectName, files, `${projectName}|${summary}`);
 
   const zip = new JSZip();
 

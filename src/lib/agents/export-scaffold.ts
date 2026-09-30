@@ -14,8 +14,10 @@
  */
 
 import type { GeneratedFile } from './types';
+import { ensureImportIntegrity } from './import-integrity';
+import { ensureStylingScaffold } from './styling-scaffold';
 
-export function ensureExportScaffold(projectName: string, files: GeneratedFile[]): GeneratedFile[] {
+export function ensureExportScaffold(projectName: string, files: GeneratedFile[], seed?: string): GeneratedFile[] {
   const has = (path: string) => files.some((f) => f.path === path);
   const added: GeneratedFile[] = [];
   const add = (path: string, content: string) => {
@@ -72,5 +74,14 @@ export function ensureExportScaffold(projectName: string, files: GeneratedFile[]
     add('.gitignore', ['node_modules', '.next', '.env*.local', '.vercel', '*.tsbuildinfo', 'next-env.d.ts', ''].join('\n'));
   }
 
-  return [...files, ...added];
+  // Styling backbone: every export must actually RENDER its design
+  // (globals.css + tailwind config + deps). Seed matches the codegen
+  // design-brief seed so the CSS personality matches the prompt's.
+  const all = [...files, ...added];
+  ensureStylingScaffold(seed || projectName, all);
+
+  // Import integrity: any module imported but never written gets a typed stub,
+  // so every export compiles no matter what the agents missed.
+  ensureImportIntegrity(all);
+  return all;
 }
