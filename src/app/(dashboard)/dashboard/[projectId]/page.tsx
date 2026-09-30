@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { SetupAgent } from '@/components/setup-agent';
 import AppKeysPanel from '@/components/app-keys';
+import BuildFlowBar from '@/components/build-flow-bar';
 import { agentName } from '@/lib/agents/types';
 
 interface AgentActivity {
@@ -211,7 +212,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
   const { state, progress, agentActivity } = data;
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white pb-24">
       {/* Header */}
       <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur-xl z-50">
         <div className="flex items-center gap-3">
@@ -473,7 +474,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
                     <span className="text-white/70 text-sm">{state.specs.monetization}</span>
                   </div>
                   {Array.isArray(state.specs.requiredApis) && state.specs.requiredApis.length > 0 && (
-                    <div>
+                    <div id="api-keys">
                       <h4 className="text-sm font-medium text-white/80 mb-2">Services this app needs — add keys right here</h4>
                       <AppKeysPanel projectId={projectId} requiredApis={state.specs.requiredApis} />
                     </div>
@@ -761,6 +762,9 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
         missingKeys={missingKeys}
         projectId={projectId}
       />
+
+      {/* Guided flow: Build → Configure → Deploy */}
+      <BuildFlowBar projectId={projectId} status={state.status} requiredApis={state.specs?.requiredApis} />
     </div>
   );
 }

@@ -58,6 +58,7 @@ export default function AppKeysPanel({ projectId, requiredApis }: {
       });
       const data = await res.json();
       if (res.ok) {
+        window.dispatchEvent(new CustomEvent('bodigi-keys-saved'));
         setSaved((s) => ({ ...s, [envVar]: true }));
         setDrafts((d) => ({ ...d, [envVar]: '' }));
         setEditing((e) => ({ ...e, [envVar]: false }));
