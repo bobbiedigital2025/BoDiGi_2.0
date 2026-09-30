@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import {
   Brain, Code2, Database, Shield, Rocket, FileText, Wrench,
   CheckCircle2, XCircle, Loader2, Clock, AlertCircle, Download, Zap, ZapOff,
-  FlaskConical, Scale, Eye, List, BarChart3, Bot, Pencil
+  FlaskConical, Scale, Eye, List, BarChart3, Bot, Pencil, Check, X
 } from 'lucide-react';
 import { SetupAgent } from '@/components/setup-agent';
 import AppKeysPanel from '@/components/app-keys';
@@ -133,6 +133,26 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
 
+  // Rename commits on Enter, blur, or the ✓ button; only Escape/✗ discards.
+  // On success the local state updates immediately so the new name shows
+  // without waiting for the next poll.
+  const saveRename = async () => {
+    const name = nameDraft.trim();
+    setRenaming(false);
+    if (name.length < 2 || !data || name === data.state.name) return;
+    const res = await fetch(`/api/generate/${projectId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) {
+      setData((d) => (d ? { ...d, state: { ...d.state, name } } : d));
+    } else {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || 'Rename failed');
+    }
+  };
+
   // Detect if project has build issues (failed tasks). Missing deploymentUrl is NOT
   // an issue — apps are hosted previews inside BoDiGi 2.0, not external deployments.
   const hasDeploymentIssues = data?.state?.tasks?.some(t => t.status === 'failed');
@@ -204,29 +224,34 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
           )}
           <div>
             {renaming ? (
-              <input
-                autoFocus
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                onKeyDown={async (e) => {
-                  if (e.key === 'Escape') { setRenaming(false); return; }
-                  if (e.key !== 'Enter') return;
-                  const name = nameDraft.trim();
-                  setRenaming(false);
-                  if (name.length < 2 || name === state.name) return;
-                  const res = await fetch(`/api/generate/${projectId}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name }),
-                  });
-                  if (!res.ok) {
-                    const j = await res.json().catch(() => ({}));
-                    alert(j.error || 'Rename failed');
-                  }
-                }}
-                onBlur={() => setRenaming(false)}
-                className="font-semibold text-sm bg-white/10 border border-fuchsia-500/40 rounded px-2 py-0.5 outline-none w-56"
-              />
+              <span className="flex items-center gap-1">
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') { setRenaming(false); return; }
+                    if (e.key === 'Enter') { e.preventDefault(); saveRename(); }
+                  }}
+                  onBlur={() => saveRename()}
+                  className="font-semibold text-sm bg-white/10 border border-fuchsia-500/40 rounded px-2 py-0.5 outline-none w-56"
+                />
+                <button
+                  title="Save name"
+                  onMouseDown={(e) => e.preventDefault() /* keep input focus so blur doesn't double-fire */}
+                  onClick={() => saveRename()}
+                  className="p-1 rounded hover:bg-white/10 text-emerald-400"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  title="Cancel"
+                  onMouseDown={(e) => { e.preventDefault(); setRenaming(false); }}
+                  className="p-1 rounded hover:bg-white/10 text-white/50"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </span>
             ) : (
               <h1
                 className="font-semibold text-sm cursor-text group/title flex items-center gap-1.5"
