@@ -81,11 +81,21 @@ export async function GET(
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
+  // User-triggered Vercel deploys persist their URL on the projects row —
+  // read it once and hand it to every branch so the dashboard can show
+  // "view your working application" the moment a deploy lands.
+  const { data: projRow } = await supabase
+    .from('projects')
+    .select('deployment_url')
+    .eq('id', projectId)
+    .maybeSingle();
+  const deploymentUrl = (projRow?.deployment_url as string | null) || null;
+
   // Try in-memory first (active pipeline)
   const project = getProject(projectId);
 
   if (project) {
-    return NextResponse.json(project);
+    return NextResponse.json({ ...project, deploymentUrl });
   }
 
   // Try Supabase (completed/persisted project)
@@ -102,6 +112,7 @@ export async function GET(
       letta: { connected: hasLettaKey(), model: hasLettaKey() ? 'Letta Cloud' : 'offline' },
       testResults: null,
       complianceChecks: null,
+      deploymentUrl,
     });
   }
 

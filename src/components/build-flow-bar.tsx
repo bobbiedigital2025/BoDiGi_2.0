@@ -19,7 +19,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Sparkles, KeyRound, Rocket, ArrowRight, Loader2 } from 'lucide-react';
+import { Check, Sparkles, KeyRound, Rocket, ArrowRight, Loader2, PartyPopper } from 'lucide-react';
 
 interface RequiredApi {
   provider: string;
@@ -36,10 +36,12 @@ export default function BuildFlowBar({
   projectId,
   status,
   requiredApis,
+  deploymentUrl,
 }: {
   projectId: string;
   status: string;
   requiredApis?: RequiredApi[];
+  deploymentUrl?: string | null;
 }) {
   const router = useRouter();
   const [saved, setSaved] = useState<SavedKey[]>([]);
@@ -78,8 +80,10 @@ export default function BuildFlowBar({
   );
   const keysDone = loaded && missing.length === 0;
 
-  // Step: 1 building, 2 needs keys, 3 ready to deploy
-  const step = !buildDone ? 1 : !keysDone ? 2 : 3;
+  const deployed = !!deploymentUrl;
+
+  // Step: 1 building, 2 needs keys, 3 ready to deploy, 4 live
+  const step = !buildDone ? 1 : !keysDone ? 2 : !deployed ? 3 : 4;
 
   const goToKeys = () => {
     const el = document.getElementById('api-keys');
@@ -148,6 +152,26 @@ export default function BuildFlowBar({
                 Next: deploy your app — it&apos;s ready
                 <Rocket className="w-4 h-4" />
               </button>
+            )}
+            {step === 4 && (
+              <div className="flex items-center gap-3">
+                <a
+                  href={deploymentUrl!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 transition shadow-lg shadow-emerald-600/20"
+                >
+                  <PartyPopper className="w-4 h-4" />
+                  View your working application
+                </a>
+                <button
+                  onClick={() => router.push(`/preview/${projectId}`)}
+                  className="text-xs text-white/40 hover:text-white/70 transition shrink-0"
+                  title="Redeploy or manage"
+                >
+                  manage
+                </button>
+              </div>
             )}
           </div>
         </div>

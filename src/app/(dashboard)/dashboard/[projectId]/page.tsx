@@ -24,6 +24,7 @@ interface AgentActivity {
 }
 
 interface ProjectData {
+  deploymentUrl?: string | null;
   state: {
     id: string;
     name: string;
@@ -764,7 +765,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
       />
 
       {/* Guided flow: Build → Configure → Deploy */}
-      <BuildFlowBar projectId={projectId} status={state.status} requiredApis={state.specs?.requiredApis} />
+      <BuildFlowBar projectId={projectId} status={state.status} requiredApis={state.specs?.requiredApis} deploymentUrl={data.deploymentUrl} />
     </div>
   );
 }
