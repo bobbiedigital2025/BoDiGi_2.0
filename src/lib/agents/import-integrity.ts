@@ -120,7 +120,7 @@ export function ensureImportIntegrity(
   for (const [base, entry] of missing) {
     if (entry.css) {
       files.push({ path: base.endsWith('.css') ? base : `${base}.css`, content: '/* stub: referenced but never generated */\n', agent: 'devops', status: 'generated' });
-      log?.(`Import integrity: injected empty stylesheet ${base}.css (an agent imported it but never wrote it)`);
+      log?.(`AGENT-MISS: injected empty stylesheet ${base}.css (an agent imported it but never wrote it)`);
       continue;
     }
     // Prefer .tsx — stubs may contain JSX
@@ -144,7 +144,7 @@ export function ensureImportIntegrity(
       parts.push(`export default function Stub(props: any) {\n  return <div className={props?.className}>{props?.children}</div>;\n}\n`);
     }
     files.push({ path, content: parts.join('\n'), agent: 'devops', status: 'generated' });
-    log?.(`Import integrity: injected stub ${path} (an agent imported it but never wrote it)`);
+    log?.(`AGENT-MISS: injected stub ${path} (an agent imported it but never wrote it)`);
   }
 
   return files;
