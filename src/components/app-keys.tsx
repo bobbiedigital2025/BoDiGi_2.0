@@ -37,7 +37,7 @@ export default function AppKeysPanel({ projectId, requiredApis }: {
       .then((d) => {
         const map: Record<string, boolean> = {};
         for (const k of d.keys || d || []) {
-          if (k.key_name) map[k.key_name] = true;
+          if (k.keyName) map[k.keyName] = true;
         }
         setSaved(map);
       })
@@ -124,7 +124,7 @@ export default function AppKeysPanel({ projectId, requiredApis }: {
                       />
                       <button
                         onClick={() => saveKey(envVar)}
-                        disabled={busyKey === envVar || (drafts[envVar] || '').trim().length < 8}
+                        disabled={busyKey === envVar || (drafts[envVar] || '').trim().length < 10}
                         className="text-xs px-2.5 py-1 rounded bg-white text-black font-medium disabled:opacity-40"
                       >
                         {busyKey === envVar ? 'Saving…' : 'Save'}

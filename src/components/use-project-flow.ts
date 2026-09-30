@@ -19,12 +19,13 @@ export interface RequiredApi {
 
 interface SavedKey {
   provider: string;
-  key_name: string;
+  keyName: string;
 }
 
 export interface ProjectFlow {
   /** 1 build · 2 configure · 3 deploy · 4 live */
   step: 1 | 2 | 3 | 4;
+  buildFailed: boolean;
   buildDone: boolean;
   keysDone: boolean;
   deployed: boolean;
@@ -70,10 +71,13 @@ export function useProjectFlow(
   }, [refresh]);
 
   const buildDone = status === 'done';
+  const buildFailed = status === 'failed';
   const required = (requiredApis || []).filter(a => a.required !== false);
-  const missing = required.flatMap(a =>
-    a.envVars.filter(v => !saved.some(k => k.provider.toLowerCase() === a.provider.toLowerCase() && k.key_name === v))
-  );
+  // Match on key name alone: the keys API buckets unknown providers
+  // (stripe, resend, twilio...) under 'custom', so provider matching would
+  // strand them on step 2 forever. Key names are unique per project.
+  const savedNames = new Set(saved.map(k => k.keyName));
+  const missing = required.flatMap(a => a.envVars.filter(v => !savedNames.has(v)));
   const keysDone = loaded && missing.length === 0;
   const deployed = !!deploymentUrl;
 
@@ -84,7 +88,7 @@ export function useProjectFlow(
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.classList.add('ring-2', 'ring-fuchsia-400', 'rounded-xl');
-      setTimeout(() => el.classList.remove('ring-2', 'ring-fuchsia-400'), 2500);
+      setTimeout(() => el.classList.remove('ring-2', 'ring-fuchsia-400', 'rounded-xl'), 2500);
     }
   }, []);
 
@@ -94,6 +98,7 @@ export function useProjectFlow(
 
   return {
     step,
+    buildFailed,
     buildDone,
     keysDone,
     deployed,

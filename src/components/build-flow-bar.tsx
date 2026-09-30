@@ -5,7 +5,7 @@
  * Journey state comes from useProjectFlow (shared with the header menu).
  */
 
-import { Check, Sparkles, KeyRound, Rocket, ArrowRight, Loader2, PartyPopper } from 'lucide-react';
+import { Check, Sparkles, KeyRound, Rocket, ArrowRight, Loader2, PartyPopper, TriangleAlert } from 'lucide-react';
 import type { ProjectFlow } from './use-project-flow';
 
 const steps = [
@@ -15,7 +15,7 @@ const steps = [
 ];
 
 export default function BuildFlowBar({ flow }: { flow: ProjectFlow }) {
-  const { step, missingCount, deploymentUrl, goToKeys, goToDeploy } = flow;
+  const { step, missingCount, deploymentUrl, goToKeys, goToDeploy, buildFailed } = flow;
 
   return (
     <div className="fixed bottom-0 inset-x-0 z-40 pointer-events-none">
@@ -45,7 +45,13 @@ export default function BuildFlowBar({ flow }: { flow: ProjectFlow }) {
 
           {/* CTA */}
           <div className="flex-1 min-w-0">
-            {step === 1 && (
+            {buildFailed && (
+              <div className="flex items-center gap-2 text-sm text-red-300">
+                <TriangleAlert className="w-4 h-4 shrink-0" />
+                <span className="truncate">Build hit an error — check the pipeline log above.</span>
+              </div>
+            )}
+            {!buildFailed && step === 1 && (
               <div className="flex items-center gap-2 text-sm text-white/60">
                 <Loader2 className="w-4 h-4 animate-spin text-fuchsia-400" />
                 <span className="truncate">Building your app — watch the agents work…</span>

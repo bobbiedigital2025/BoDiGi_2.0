@@ -214,6 +214,10 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
 
   const { state, progress, agentActivity } = data;
   const flow = useProjectFlow(projectId, state.status, state.specs?.requiredApis, data.deploymentUrl);
+  // From the Live Preview tab, "add keys" must first flip back to the
+  // pipeline view (that's where the panel lives) — otherwise the button
+  // scrolls to nothing and looks dead.
+  const goToKeys = () => { setView('pipeline'); setTimeout(flow.goToKeys, 60); };
 
   return (
     <div className="min-h-screen bg-black text-white pb-24">
@@ -271,7 +275,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <ProjectJourneyMenu projectId={projectId} flow={flow} />
+          <ProjectJourneyMenu projectId={projectId} flow={{ ...flow, goToKeys }} />
           {data.ai && (
             <Badge variant={data.ai.connected ? 'success' : 'warning'} className="text-xs">
               {data.ai.connected ? <Zap className="w-3 h-3 mr-1" /> : <ZapOff className="w-3 h-3 mr-1" />}
@@ -754,7 +758,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
       {/* Setup Agent floating button */}
       <button
         onClick={() => setSetupAgentOpen(true)}
-        className="fixed bottom-4 left-4 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/30 flex items-center justify-center hover:scale-110 transition-transform"
+        className="fixed bottom-4 left-4 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/30 flex items-center justify-center hover:scale-110 transition-transform"
         title="Setup Agent — Get help with API keys, deployment, and customization"
       >
         <Bot className="w-6 h-6 text-white" />
@@ -769,7 +773,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
       />
 
       {/* Guided flow: Build → Configure → Deploy */}
-      <BuildFlowBar flow={flow} />
+      <BuildFlowBar flow={{ ...flow, goToKeys }} />
     </div>
   );
 }

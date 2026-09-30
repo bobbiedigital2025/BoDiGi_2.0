@@ -95,6 +95,11 @@ export async function GET(
   const project = getProject(projectId);
 
   if (project) {
+    // In-memory projects must pass the same ownership check as persisted
+    // ones — guessing a live projectId must not hand over the state/files.
+    if (project.userId && project.userId !== user.id) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
     return NextResponse.json({ ...project, deploymentUrl });
   }
 

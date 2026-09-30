@@ -90,6 +90,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // 2. Load project files (in-memory first, then Supabase) + ownership check
   const inMemory = getProject(projectId);
+    // Same ownership rule as the GET route: a live in-memory project must
+    // not be deployable (full source exfiltration) by another account.
+    if (inMemory?.userId && inMemory.userId !== user.id) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
   let projectName: string;
   let files: GeneratedFile[];
   let requiredProviders: string[] = [];

@@ -46,6 +46,9 @@ export default function VercelDeployPanel({
       const data = await res.json();
       if (res.ok && data.success) {
         setDeploy({ status: 'done', url: data.url, sandboxProviders: data.sandboxProviders });
+      } else if (res.ok && data.deploymentUrl) {
+        // 202: build still finishing — the deploy exists, show its URL.
+        setDeploy({ status: 'done', url: data.deploymentUrl, sandboxProviders: data.sandboxProviders });
       } else if (data.needToken) {
         setConnected(false);
         setDeploy({ status: 'error', message: 'Vercel connection missing — reconnect below.' });
