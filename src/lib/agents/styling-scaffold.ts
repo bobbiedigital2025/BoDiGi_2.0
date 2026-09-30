@@ -170,7 +170,7 @@ export function ensureStylingScaffold(
         pkg.content = JSON.stringify(parsed, null, 2) + '\n';
         log?.('Styling scaffold: added tailwindcss + @tailwindcss/postcss to package.json');
       }
-    } catch { /* leave a malformed package.json to the import-integrity logs */ }
+    } catch { log?.('Styling scaffold: package.json is malformed JSON — left untouched, build will surface it'); }
   }
 
   // 2. PostCSS config
@@ -185,10 +185,14 @@ export function ensureStylingScaffold(
     log?.(`Styling scaffold: added globals.css with design personality skin`);
   }
 
-  // 4. layout imports the stylesheet (only safe prepend — never rewrite)
-  const layout = files.find(f => f.path === 'src/app/layout.tsx');
-  if (layout && !layout.content.includes('globals.css')) {
-    layout.content = `import './globals.css';\n` + layout.content;
+  // 4. layout imports the stylesheet (only safe prepend — never rewrite).
+  //    Accept any app-root layout (src/app or app, tsx/ts/jsx/js) — agents
+  //    sometimes violate the src/ convention and an orphaned globals.css
+  //    means an unstyled app. Require an actual import, not a comment.
+  const layout = files.find(f => /(^|\/)app\/layout\.(tsx|ts|jsx|js)$/.test(f.path));
+  if (layout && !/import\s+['"][^'"]*globals\.css['"]/.test(layout.content)) {
+    const cssPath = layout.path.startsWith('src/') ? './globals.css' : './src/app/globals.css';
+    layout.content = `import '${cssPath}';\n` + layout.content;
     log?.('Styling scaffold: wired globals.css into root layout');
   }
 

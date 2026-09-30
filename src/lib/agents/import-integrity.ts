@@ -20,8 +20,10 @@ export interface ImportIntegrityFile {
   status?: string;
 }
 
-const IMPORT_RE = /import\s+(?:type\s+)?([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g;
+const IMPORT_RE = /import\s+((?:type\s+)?[^;'"\n]+?)\s+from\s+['"]([^'"]+)['"]/g;
 const SIDE_EFFECT_RE = /import\s+['"]([^'"]+)['"]/g;
+const REEXPORT_RE = /export\s+[^;'"\n]+?\s+from\s+['"]([^'"]+)['"]/g;
+const DYNAMIC_RE = /import\(\s*['"]([^'"]+)['"]\s*\)/g;
 
 function candidates(resolvedNoExt: string): string[] {
   return [
@@ -33,6 +35,10 @@ function candidates(resolvedNoExt: string): string[] {
     `${resolvedNoExt}.css`,
     `${resolvedNoExt}/index.tsx`,
     `${resolvedNoExt}/index.ts`,
+    `${resolvedNoExt}/index.jsx`,
+    `${resolvedNoExt}/index.js`,
+    `${resolvedNoExt}.mjs`,
+    `${resolvedNoExt}.json`,
   ];
 }
 
@@ -51,23 +57,28 @@ function resolveSpec(spec: string, fromPath: string): string | null {
 }
 
 /** Parse the imported bindings from an import clause: default + named. */
-function parseBindings(clause: string): { defaultName: string | null; named: string[] } {
+function parseBindings(clause: string): { defaultName: string | null; named: string[]; typeOnly: string[] } {
   clause = clause.trim();
-  if (!clause || clause.startsWith('type ')) clause = clause.replace(/^type\s+/, '');
+  const typeOnly: string[] = [];
+  const isTypeImport = clause.startsWith('type ');
+  if (isTypeImport) clause = clause.replace(/^type\s+/, '');
   let defaultName: string | null = null;
   const named: string[] = [];
   const braceMatch = clause.match(/\{([\s\S]*?)\}/);
   if (braceMatch) {
     for (const part of braceMatch[1].split(',')) {
-      const name = part.trim().split(/\s+as\s+/).pop()?.trim();
-      if (name && !name.startsWith('type ')) named.push(name);
+      let name = part.trim().split(/\s+as\s+/).pop()?.trim();
+      if (!name) continue;
+      if (name.startsWith('type ')) { name = name.slice(5).trim(); typeOnly.push(name); continue; }
+      if (isTypeImport) typeOnly.push(name);
+      else named.push(name);
     }
     clause = clause.replace(/\{[\s\S]*?\}/, '').replace(/,\s*$/, '').trim();
   }
   if (clause && !clause.startsWith('*')) {
     defaultName = clause.replace(/,\s*$/, '').trim() || null;
   }
-  return { defaultName, named };
+  return { defaultName, named, typeOnly };
 }
 
 function stubFor(name: string): string {
@@ -92,7 +103,7 @@ export function ensureImportIntegrity(
   const paths = () => new Set(files.map(f => f.path));
 
   // Missing stub files to create: target path -> { named:Set, default:boolean }
-  const missing = new Map<string, { named: Set<string>; needsDefault: boolean; css: boolean }>();
+  const missing = new Map<string, { named: Set<string>; typeOnly: Set<string>; needsDefault: boolean; needsNamespace: boolean; css: boolean }>();
 
   const consider = (spec: string, clause: string | null, fromPath: string) => {
     const base = resolveSpec(spec, fromPath);
@@ -100,13 +111,15 @@ export function ensureImportIntegrity(
     const set = paths();
     if (candidates(base).some(c => set.has(c))) return;
     // Don't double-create; merge bindings if several files import the same module
-    const entry = missing.get(base) || { named: new Set<string>(), needsDefault: false, css: false };
+    const entry = missing.get(base) || { named: new Set<string>(), typeOnly: new Set<string>(), needsDefault: false, needsNamespace: false, css: false };
     if (/\.css$/.test(spec)) {
       entry.css = true;
     } else if (clause) {
-      const { defaultName, named } = parseBindings(clause);
+      const { defaultName, named, typeOnly } = parseBindings(clause);
       if (defaultName) entry.needsDefault = true;
+      if (/\*\s+as\s+/.test(clause)) entry.needsNamespace = true;
       for (const n of named) entry.named.add(n);
+      for (const t of typeOnly) entry.typeOnly.add(t);
     }
     missing.set(base, entry);
   };
@@ -115,9 +128,16 @@ export function ensureImportIntegrity(
     if (!/\.(tsx?|jsx?)$/.test(f.path)) continue;
     for (const m of f.content.matchAll(IMPORT_RE)) consider(m[2], m[1], f.path);
     for (const m of f.content.matchAll(SIDE_EFFECT_RE)) consider(m[1], null, f.path);
+    for (const m of f.content.matchAll(REEXPORT_RE)) consider(m[1], null, f.path);
+    for (const m of f.content.matchAll(DYNAMIC_RE)) consider(m[1], null, f.path);
   }
 
   for (const [base, entry] of missing) {
+    if (/\.json$/.test(base)) {
+      files.push({ path: base, content: '{}\n', agent: 'devops', status: 'generated' });
+      log?.(`AGENT-MISS: injected empty JSON ${base} (an agent imported it but never wrote it)`);
+      continue;
+    }
     if (entry.css) {
       files.push({ path: base.endsWith('.css') ? base : `${base}.css`, content: '/* stub: referenced but never generated */\n', agent: 'devops', status: 'generated' });
       log?.(`AGENT-MISS: injected empty stylesheet ${base}.css (an agent imported it but never wrote it)`);
@@ -130,7 +150,12 @@ export function ensureImportIntegrity(
       `// Renders minimal markup so the build compiles; regenerate or hand-edit for real behavior.`,
       ``,
     ];
+    for (const t of entry.typeOnly) parts.push(`export type ${t} = any;\n`);
     for (const n of entry.named) parts.push(stubFor(n));
+    if (entry.needsNamespace) {
+      // Permissive namespace: any property access compiles.
+      parts.push(`export const __ns = new Proxy({}, { get: () => () => null });\n`);
+    }
     if (entry.needsDefault) {
       const first = [...entry.named][0];
       if (first && /^[A-Z]/.test(first)) {

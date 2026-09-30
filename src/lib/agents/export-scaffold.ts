@@ -78,6 +78,43 @@ export function ensureExportScaffold(projectName: string, files: GeneratedFile[]
   // (globals.css + tailwind config + deps). Seed matches the codegen
   // design-brief seed so the CSS personality matches the prompt's.
   const all = [...files, ...added];
+
+  // Root layout/page: Next requires a root layout; the import-integrity
+  // pass can't see these (nothing imports them), so old builds missing
+  // them exported unbuildable. Same guarantee as the orchestrator path.
+  const appNameSafe = projectName.replace(/'/g, "");
+  if (!all.some(f => f.path === 'src/app/layout.tsx') && !all.some(f => f.path === 'app/layout.tsx')) {
+    all.push({ path: 'src/app/layout.tsx', content: `import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
+
+export const metadata: Metadata = {
+  title: '${appNameSafe}',
+  description: 'Built with BoDiGi 2.0',
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+`, agent: 'devops', status: 'generated' });
+    console.warn('Export scaffold: added missing root layout.tsx');
+  }
+  if (!all.some(f => f.path === 'src/app/page.tsx') && !all.some(f => f.path === 'app/page.tsx')) {
+    all.push({ path: 'src/app/page.tsx', content: `export default function Home() {
+  return (
+    <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>
+      <h1>${appNameSafe}</h1>
+      <p>Built with BoDiGi 2.0</p>
+    </main>
+  );
+}
+`, agent: 'devops', status: 'generated' });
+    console.warn('Export scaffold: added missing root page.tsx');
+  }
+
   ensureStylingScaffold(seed || projectName, all);
 
   // Import integrity: any module imported but never written gets a typed stub,

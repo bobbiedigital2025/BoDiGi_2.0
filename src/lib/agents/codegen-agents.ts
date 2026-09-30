@@ -322,6 +322,8 @@ export async function POST(request: NextRequest) {
 export interface FrontendAgentInput {
   architecture: ArchitectureDoc;
   specs: ProjectSpecs;
+  /** Project display name — used for the design-brief seed; must match the styling-scaffold seed. */
+  projectName?: string;
 }
 
 export interface FrontendAgentOutput {
@@ -785,7 +787,11 @@ export function buildFrontendPrompt(input: FrontendAgentInput): string {
   const routes = architecture.pageRoutes
     .map(r => `${r.path} — ${r.name} (${r.role})`)
     .join(', ');
-  const seed = `${(specs as { name?: string }).name || ''}|${specs.summary || ''}`;
+  // Seed MUST match the styling-scaffold seed (`name|summary`) — same
+  // djb2 hash → same personality index → CSS skin matches the brief.
+  // Seed MUST match the styling-scaffold seed (`name|summary`) — same
+  // djb2 hash → same personality index → CSS skin matches the brief.
+  const seed = `${input.projectName || ''}|${specs.summary || ''}`;
   const brief = designBriefFor(seed);
   return `Project: ${specs.summary}
 Tech stack: ${specs.techStack.frontend}

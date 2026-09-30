@@ -181,7 +181,7 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
           if (!hasAIKey()) await delay(3500);
           const state = orchestrator.getState();
           const result = await runFrontendAgent(
-            { architecture: state.architecture!, specs: state.specs! },
+            { architecture: state.architecture!, specs: state.specs!, projectName: state.name },
             (level, msg) => orchestrator.log('frontend', level, msg)
           );
           project.files.push(...result.files);

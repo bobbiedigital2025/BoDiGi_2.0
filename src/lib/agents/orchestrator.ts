@@ -437,18 +437,11 @@ export class AppForgeOrchestrator {
     if (!has('.gitignore')) {
       add('.gitignore', ['node_modules', '.next', '.env*.local', '.vercel', '*.tsbuildinfo', 'next-env.d.ts', ''].join('\n'));
     }
-    // Styling backbone: the design personality must exist as real CSS,
-    // not just prompt words. Same seed as the codegen design brief so the
-    // CSS skin matches the direction the agent was given.
-    const stylingSeed = `${this.state.name}|${(this.state.specs as { summary?: string } | null)?.summary || ''}`;
-    ensureStylingScaffold(stylingSeed, this.state.generatedFiles, (msg) => this.log('devops', 'info', msg));
-
-    // Import integrity: any module imported but never written gets a typed
-    // stub, so the file set compiles no matter what an agent missed.
-    ensureImportIntegrity(this.state.generatedFiles, (msg) => this.log('devops', 'warn', msg));
-
     // Root layout/page are required by Next conventions (nothing imports
-    // them, so the integrity pass can't see them). Guarantee them too.
+    // them, so the integrity pass can't see them). Guaranteed FIRST so the
+    // styling pass below can wire globals.css into the layout it finds —
+    // if the layout is created after, the app ships unstyled (the exact
+    // regression this scaffold exists to prevent).
     if (!has('src/app/layout.tsx')) {
       add('src/app/layout.tsx', `import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
@@ -478,6 +471,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 }
 `);
     }
+
+    // Styling backbone: the design personality must exist as real CSS,
+    // not just prompt words. Same seed as the codegen design brief so the
+    // CSS skin matches the direction the agent was given.
+    const stylingSeed = `${this.state.name}|${(this.state.specs as { summary?: string } | null)?.summary || ''}`;
+    ensureStylingScaffold(stylingSeed, this.state.generatedFiles, (msg) => this.log('devops', 'info', msg));
+
+    // Import integrity: any module imported but never written gets a typed
+    // stub, so the file set compiles no matter what an agent missed.
+    ensureImportIntegrity(this.state.generatedFiles, (msg) => this.log('devops', 'warn', msg));
 
   }
 
