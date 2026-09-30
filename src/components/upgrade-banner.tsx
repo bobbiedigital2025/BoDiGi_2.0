@@ -13,6 +13,8 @@ import { Rocket, X } from 'lucide-react';
 export function UpgradeBanner() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  // null = unknown, 'loading' handled by tier===null; fail CLOSED — a failed
+  // profile fetch must never downgrade a paying user to "free" and nag them.
   const [tier, setTier] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -25,6 +27,7 @@ export function UpgradeBanner() {
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
+        if (!data) return; // fetch failed → stay null → banner stays hidden
         if (data?.role === 'admin') {
           setTier('admin');
         } else {

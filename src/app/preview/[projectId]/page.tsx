@@ -1,3 +1,4 @@
+import { resolveTier } from '@/lib/trial';
 import { getProjectAnywhere } from '@/lib/agents/pipeline';
 import { PreviewTabs } from '@/components/preview-tabs';
 import { createClient } from '@supabase/supabase-js';
@@ -134,10 +135,12 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
       );
       const { data: profile } = await supabase
         .from('profiles')
-        .select('tier, role, email')
+        .select('tier, role, email, is_trial, tier_expires_at')
         .eq('id', ownerId)
         .single();
-      if (profile?.tier) projectTier = profile.tier;
+      // resolveTier: an expired trial must read as free — raw profile.tier
+      // stays 'pro' forever otherwise and unlocks paid panels post-expiry.
+      if (profile) projectTier = resolveTier(profile as Parameters<typeof resolveTier>[0]);
       if (profile?.role) projectOwnerRole = profile.role;
       if (profile?.email) viewerEmail = profile.email;
 
