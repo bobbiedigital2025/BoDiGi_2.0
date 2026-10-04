@@ -379,6 +379,22 @@ export default function LandingPage() {
         {/* Footer */}
         <footer className="border-t border-white/10 mt-20">
           <div className="max-w-7xl mx-auto px-6 py-8 text-center text-sm text-white/40">
+            {/* Product Hunt launch badge — live upvote count */}
+            <div className="flex justify-center mb-6">
+              <a
+                href="https://www.producthunt.com/products/bodigi-2-0?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-bodigi-2-0"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt="BoDiGi 2.0 - You bring the idea and AI builds a business that you own | Product Hunt"
+                  width="250"
+                  height="54"
+                  src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1268254&theme=dark"
+                />
+              </a>
+            </div>
             <p>BoDiGi 2.0 — made by Bobbie Digital. Built with Letta.</p>
             <div className="flex items-center justify-center gap-4 mt-3">
               <a href="/setup" className="hover:text-white/60 transition">Setup Guide</a>
