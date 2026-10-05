@@ -1,11 +1,11 @@
 /**
  * API Route: POST /api/generate/[projectId]/ad/render
  *
- * Submits the project's ad kit narration to HeyGen as a talking-avatar
- * video. Body: { avatarId, voiceId, dimension?: '16:9' | '9:16' }.
+ * Submits the project's ad kit narration to HeyGen (v3) as a
+ * talking-avatar video. Body: { avatarId, voiceId, dimension: '16:9' | '9:16' }.
  * Requires an existing ad kit (generate one first via /ad).
  *
- * GET ?video_id=... polls the render status.
+ * GET ?video_id=... polls the render status and persists the finished URL.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -53,12 +53,14 @@ export async function POST(
   }
 
   const specs = (auth.project!.specs || {}) as Record<string, unknown>;
-  const ad = specs.ad as { script?: string; scenes?: unknown[] } | undefined;
+  const ad = specs.ad as
+    | { script?: string; angle?: string; length?: number; scenes?: unknown[] }
+    | undefined;
   if (!ad?.script) {
     return NextResponse.json({ error: 'No ad kit yet — generate one first (POST /api/generate/[projectId]/ad)' }, { status: 400 });
   }
 
-  let body: { avatarId?: string; voiceId?: string; dimension?: string } = {};
+  let body: { avatarId?: string; voiceId?: string; dimension?: string; supportedEngines?: string[] } = {};
   try {
     body = await request.json();
   } catch {
@@ -67,15 +69,21 @@ export async function POST(
   if (!body.avatarId || !body.voiceId) {
     return NextResponse.json({ error: 'avatarId and voiceId are required' }, { status: 400 });
   }
-  const dimension = body.dimension === '9:16' ? '720x1280' as const : '1280x720' as const;
+  const aspectRatio = body.dimension === '9:16' ? '9:16' as const : '16:9' as const;
+
+  // Brand background color from the kit's first scene, if present
+  const scenes = (ad.scenes as Array<{ background?: string }>) || [];
+  const backgroundColor = scenes[0]?.background || undefined;
 
   try {
-    // Submit the narration script (scene narration lines joined) as one video
     const videoId = await submitRender({
       avatarId: body.avatarId,
       voiceId: body.voiceId,
       script: ad.script,
-      dimension,
+      aspectRatio,
+      backgroundColor,
+      title: `BoDiGi Ad — ${aspectRatio === '9:16' ? 'Vertical' : 'Landscape'} ${ad.length || 30}s`,
+      supportedEngines: body.supportedEngines,
     });
 
     // Persist render state on the ad kit so the dashboard can resume polling
@@ -90,6 +98,7 @@ export async function POST(
             render_status: 'rendering',
             render: {
               provider: 'heygen',
+              api: 'v3',
               video_id: videoId,
               dimension: body.dimension || '16:9',
               started_at: new Date().toISOString(),
@@ -125,12 +134,12 @@ export async function GET(
   try {
     const status = await pollRender(videoId);
 
-    // When complete, persist the video URL on the ad kit
-    if (status.status === 'completed' && status.videoUrl) {
-      const specs = (auth.project!.specs || {}) as Record<string, unknown>;
-      const ad = specs.ad as Record<string, unknown> | undefined;
-      const supabase = createAdminClient();
-      const render = (ad?.render as Record<string, unknown>) || {};
+    const specs = (auth.project!.specs || {}) as Record<string, unknown>;
+    const ad = specs.ad as Record<string, unknown> | undefined;
+    const render = (ad?.render as Record<string, unknown>) || {};
+    const supabase = createAdminClient();
+
+    if (status.status === 'completed') {
       await supabase
         .from('projects')
         .update({
@@ -142,6 +151,9 @@ export async function GET(
               render: {
                 ...render,
                 video_url: status.videoUrl,
+                thumbnail_url: status.thumbnailUrl,
+                subtitle_url: status.subtitleUrl,
+                duration_seconds: status.durationSeconds,
                 completed_at: new Date().toISOString(),
               },
             },
@@ -149,9 +161,6 @@ export async function GET(
         })
         .eq('id', projectId);
     } else if (status.status === 'failed') {
-      const specs = (auth.project!.specs || {}) as Record<string, unknown>;
-      const ad = specs.ad as Record<string, unknown> | undefined;
-      const supabase = createAdminClient();
       await supabase
         .from('projects')
         .update({
