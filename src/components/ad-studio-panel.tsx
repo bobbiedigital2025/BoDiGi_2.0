@@ -3,15 +3,15 @@
 /**
  * AdStudioPanel — the Trupeer × Make smoosh, surfaced on the project
  * dashboard. Generates a 15/30/60-second ad script + storyboard in the
- * brand's voice. Voice/avatar rendering hooks come when their API keys
- * land; the kit itself is complete and video-ready today.
+ * brand's voice, then (when HeyGen is configured) renders it as a
+ * talking-avatar video — 16:9 or 9:16 vertical for shorts.
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Clapperboard, Copy, Check } from 'lucide-react';
+import { Loader2, Clapperboard, Copy, Check, User, Volume2 } from 'lucide-react';
 
 interface AdScene {
   scene: number;
@@ -23,6 +23,15 @@ interface AdScene {
   motion: string;
 }
 
+interface AdRender {
+  provider?: string;
+  video_id?: string;
+  video_url?: string;
+  dimension?: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
 export interface AdKitData {
   length: number;
   angle: string;
@@ -32,6 +41,19 @@ export interface AdKitData {
   platforms: string[];
   generated_at: string;
   render_status: string;
+  render?: AdRender;
+}
+
+interface HeygenAvatar {
+  avatar_id: string;
+  name: string;
+  preview_url: string | null;
+}
+
+interface HeygenVoice {
+  voice_id: string;
+  name: string;
+  language: string;
 }
 
 export function AdStudioPanel({
@@ -50,6 +72,72 @@ export function AdStudioPanel({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // HeyGen state
+  const [heygenConfigured, setHeygenConfigured] = useState<boolean | null>(null);
+  const [avatars, setAvatars] = useState<HeygenAvatar[]>([]);
+  const [voices, setVoices] = useState<HeygenVoice[]>([]);
+  const [avatarId, setAvatarId] = useState('');
+  const [voiceId, setVoiceId] = useState('');
+  const [dimension, setDimension] = useState<'16:9' | '9:16'>('16:9');
+  const [rendering, setRendering] = useState(false);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load avatar inventory once when an ad exists and HeyGen may be configured
+  useEffect(() => {
+    if (!ad) return;
+    let cancelled = false;
+    fetch(`/api/generate/${projectId}/ad/avatars`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return;
+        if (json.error) { setHeygenConfigured(false); return; }
+        setHeygenConfigured(!!json.configured);
+        setAvatars(json.avatars || []);
+        setVoices(json.voices || []);
+        if (json.avatars?.[0]) setAvatarId((prev) => prev || json.avatars[0].avatar_id);
+        if (json.voices?.[0]) setVoiceId((prev) => prev || json.voices[0].voice_id);
+      })
+      .catch(() => setHeygenConfigured(false));
+    return () => { cancelled = true; };
+  }, [projectId, !!ad]);
+
+  // If a render is already in flight (render_status === 'rendering'), resume polling
+  useEffect(() => {
+    if (ad?.render_status === 'rendering' && ad.render?.video_id) {
+      startPolling(ad.render.video_id);
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ad?.render_status, ad?.render?.video_id]);
+
+  const startPolling = (videoId: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setRendering(true);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/generate/${projectId}/ad/render?video_id=${encodeURIComponent(videoId)}`);
+        const json = await res.json();
+        if (json.status === 'completed' && json.videoUrl) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setRendering(false);
+          setAd((prev) => prev ? {
+            ...prev,
+            render_status: 'ready',
+            render: { ...prev.render, video_url: json.videoUrl },
+          } : prev);
+        } else if (json.status === 'failed') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setRendering(false);
+          setRenderError(json.error || 'Render failed — check HeyGen credits');
+          setAd((prev) => prev ? { ...prev, render_status: 'failed' } : prev);
+        }
+      } catch {
+        // transient network error — keep polling, the interval will retry
+      }
+    }, 10000);
+  };
+
   const generate = async () => {
     setBusy(true);
     setError(null);
@@ -66,6 +154,29 @@ export function AdStudioPanel({
       setError(e instanceof Error ? e.message : 'Ad generation failed');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const renderVideo = async () => {
+    setRenderError(null);
+    if (!avatarId || !voiceId) {
+      setRenderError('Pick an avatar and a voice first');
+      return;
+    }
+    setRendering(true);
+    try {
+      const res = await fetch(`/api/generate/${projectId}/ad/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarId, voiceId, dimension }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Render submission failed');
+      setAd((prev) => prev ? { ...prev, render_status: 'rendering' } : prev);
+      startPolling(json.videoId);
+    } catch (e) {
+      setRendering(false);
+      setRenderError(e instanceof Error ? e.message : 'Render submission failed');
     }
   };
 
@@ -149,6 +260,88 @@ export function AdStudioPanel({
                 {copied ? 'Copied' : 'Copy production script'}
               </Button>
             </div>
+
+            {/* ── Avatar render (HeyGen) ── */}
+            {heygenConfigured && (
+              <div className="rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/5 p-3 space-y-3">
+                <div className="text-xs font-semibold text-fuchsia-300 uppercase tracking-wide">
+                  Avatar video (HeyGen)
+                </div>
+
+                {ad.render?.video_url && ad.render_status === 'ready' ? (
+                  <div className="space-y-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <video
+                      src={ad.render.video_url}
+                      controls
+                      className="w-full rounded-lg border border-white/10"
+                    />
+                    <a
+                      href={ad.render.video_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-fuchsia-300 underline underline-offset-2"
+                    >
+                      Open video ↗ (HeyGen-hosted MP4)
+                    </a>
+                  </div>
+                ) : rendering ? (
+                  <div className="flex items-center gap-2 text-sm text-white/60">
+                    <Loader2 className="w-4 h-4 animate-spin text-fuchsia-400" />
+                    Rendering your avatar ad… (usually 1–3 minutes)
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label className="block">
+                        <span className="text-[11px] text-white/40 flex items-center gap-1"><User className="w-3 h-3" /> Avatar</span>
+                        <select
+                          value={avatarId}
+                          onChange={(e) => setAvatarId(e.target.value)}
+                          className="w-full mt-1 text-sm rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-white/85 focus:outline-none focus:border-fuchsia-400/50"
+                        >
+                          {avatars.map((a) => (
+                            <option key={a.avatar_id} value={a.avatar_id}>{a.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-[11px] text-white/40 flex items-center gap-1"><Volume2 className="w-3 h-3" /> Voice</span>
+                        <select
+                          value={voiceId}
+                          onChange={(e) => setVoiceId(e.target.value)}
+                          className="w-full mt-1 text-sm rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-white/85 focus:outline-none focus:border-fuchsia-400/50"
+                        >
+                          {voices.map((v) => (
+                            <option key={v.voice_id} value={v.voice_id}>{v.name} ({v.language})</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-white/40">Format:</span>
+                      {(['16:9', '9:16'] as const).map((d) => (
+                        <button
+                          key={d}
+                          onClick={() => setDimension(d)}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                            dimension === d
+                              ? 'border-fuchsia-400 bg-fuchsia-500/15 text-fuchsia-300'
+                              : 'border-white/10 text-white/50 hover:border-white/25'
+                          }`}
+                        >
+                          {d === '16:9' ? '16:9 landscape' : '9:16 vertical (Shorts/TikTok)'}
+                        </button>
+                      ))}
+                    </div>
+                    <Button size="sm" onClick={renderVideo}>
+                      Render avatar video
+                    </Button>
+                  </>
+                )}
+                {renderError && <p className="text-sm text-red-400">{renderError}</p>}
+              </div>
+            )}
           </div>
         )}
 
