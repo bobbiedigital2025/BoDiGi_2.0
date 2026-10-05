@@ -99,7 +99,7 @@ export function AdStudioPanel({
         setVoices(json.voices || []);
         // Default to Bobbie's newest avatar + her voice clone when present
         const bobbieAvatar = json.avatars?.find((a: HeygenAvatar) => a.avatar_id === '299c640197c34baab213ec824af9be0e');
-        const bobbieVoice = json.voices?.find((v: HeygenVoice) => v.voice_id === '1a1f098a6d3949f6aa0e225f42999989');
+        const bobbieVoice = json.voices?.find((v: HeygenVoice) => v.voice_id === '0e5ec9b420054bb2b5fddc630a69999c');
         if (bobbieAvatar) setAvatarId((prev) => prev || bobbieAvatar.avatar_id);
         else if (json.avatars?.[0]) setAvatarId((prev) => prev || json.avatars[0].avatar_id);
         if (bobbieVoice) setVoiceId((prev) => prev || bobbieVoice.voice_id);
