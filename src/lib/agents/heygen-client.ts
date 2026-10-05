@@ -1,27 +1,28 @@
 /**
- * HeyGen API client for the Ad Studio.
+ * HeyGen API client for the Ad Studio — v3 only.
  *
- * Renders an ad kit's narration script as a talking-avatar video:
+ * v1/v2 endpoints are deprecated (retired Oct 31, 2026) and produce
+ * worse output. This client speaks v3 exclusively:
  *
- *   1. listAvatars()   — the user's HeyGen avatar + voice inventory
- *   2. submitRender()  — POST /v2/video_generate (async job)
- *   3. pollRender()    — GET /v1/video_status.get until completed/failed
+ *   1. listAvatars()  — GET /v3/avatars/looks (private + public looks)
+ *   2. listVoices()   — GET /v3/voices
+ *   3. submitRender() — POST /v3/videos (type: "avatar", async job)
+ *   4. pollRender()   — GET /v3/videos/{video_id}
  *
- * HeyGen v2 flow: create the job, get a video_id back, poll the status
- * endpoint until status === "completed", then download from
- * video_url. Free-tier keys can list streaming avatars but video
- * generation requires credits — the caller surfaces that honestly.
+ * Engine: requests Avatar V (highest fidelity) when the look supports
+ * it, falling back to the default Avatar IV.
  */
 
 const HEYGEN_BASE = 'https://api.heygen.com';
 
 export interface HeygenAvatar {
   avatar_id: string;
-  /** Human label, e.g. "Anna — Professional" */
   name: string;
-  /** "v2" photo avatar, "talking_photo", etc. */
+  /** photo_avatar | studio_avatar | digital_twin */
   type: string;
   preview_url: string | null;
+  /** Which engines this look accepts: avatar_iii / avatar_iv / avatar_v */
+  supported_engines: string[];
   gender: string | null;
 }
 
@@ -37,122 +38,177 @@ export function hasHeygenKey(): boolean {
   return !!process.env.HEYGEN_API_KEY;
 }
 
-async function heygenFetch(path: string, init?: RequestInit): Promise<unknown> {
+async function heygenFetch(path: string, init?: RequestInit): Promise<Record<string, unknown>> {
   const key = process.env.HEYGEN_API_KEY;
   if (!key) throw new Error('HEYGEN_API_KEY not configured');
   const res = await fetch(`${HEYGEN_BASE}${path}`, {
     ...init,
     headers: {
-      'X-Api-Key': key,
+      'x-api-key': key,
       'Content-Type': 'application/json',
       ...(init?.headers || {}),
     },
   });
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
+    const err = (body.error as Record<string, unknown>) || body;
     const message =
-      (body.error as string) ||
-      (typeof body.message === 'string' ? body.message : JSON.stringify(body).slice(0, 200));
+      (err.message as string) ||
+      (err.failure_message as string) ||
+      JSON.stringify(body).slice(0, 200);
     throw new Error(`HeyGen API error (${res.status}): ${message}`);
   }
   return body;
 }
 
-/** List the account's streaming avatars (photo avatars usable for video). */
+/** List the account's avatar looks (private first, then public stock). */
 export async function listAvatars(): Promise<HeygenAvatar[]> {
-  const body = (await heygenFetch('/v2/avatars?limit=50')) as {
-    data?: { avatars?: Array<Record<string, unknown>> };
-  };
-  const avatars = body.data?.avatars || [];
-  return avatars.map((a) => ({
-    avatar_id: String(a.avatar_id),
-    name: String(a.avatar_name || a.avatar_id),
-    type: String(a.type || 'v2'),
-    preview_url: (a.preview_image_url as string) || (a.preview_video_url as string) || null,
-    gender: (a.gender as string) || null,
-  }));
+  const out: HeygenAvatar[] = [];
+  const seen = new Set<string>();
+
+  for (const ownership of ['private', 'public'] as const) {
+    const body = (await heygenFetch(
+      `/v3/avatars/looks?ownership=${ownership}&limit=50`,
+    )) as { data?: Array<Record<string, unknown>> };
+    for (const a of body.data || []) {
+      const id = String(a.id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({
+        avatar_id: id,
+        name: String(a.name || a.avatar_name || id),
+        type: String(a.avatar_type || 'photo_avatar'),
+        preview_url: (a.preview_image_url as string) || null,
+        supported_engines: (a.supported_api_engines as string[]) || ['avatar_iv'],
+        gender: (a.gender as string) || null,
+      });
+    }
+    if (ownership === 'private' && out.length >= 20) break; // plenty
+  }
+  return out;
 }
 
 /** List the account's voices. */
 export async function listVoices(): Promise<HeygenVoice[]> {
-  const body = (await heygenFetch('/v2/voices?limit=100')) as {
-    data?: { voices?: Array<Record<string, unknown>> };
+  const body = (await heygenFetch('/v3/voices?limit=100')) as {
+    data?: Array<Record<string, unknown>>;
   };
-  const voices = body.data?.voices || [];
+  const voices = body.data || [];
   return voices.map((v) => ({
     voice_id: String(v.voice_id),
     name: String(v.name || v.voice_id),
     language: String(v.language || ''),
     gender: String(v.gender || ''),
-    preview_url: (v.preview_audio as string) || null,
+    preview_url: (v.preview_audio_url as string) || null,
   }));
 }
 
-/**
- * Submit an avatar video render. Returns the HeyGen video_id to poll.
- *
- * dimension: "1280x720" (16:9) or "720x1280" (9:16 vertical for shorts).
- */
-export async function submitRender(opts: {
+export interface SubmitRenderOpts {
   avatarId: string;
   voiceId: string;
   script: string;
-  backgroundUrl?: string;
-  dimension?: '1280x720' | '720x1280';
-}): Promise<string> {
-  const body = (await heygenFetch('/v2/video_generate', {
+  /** Brand background hex, e.g. "#0f0f14" */
+  backgroundColor?: string;
+  /** "16:9" landscape or "9:16" vertical (Shorts/TikTok) */
+  aspectRatio: '16:9' | '9:16';
+  /** Display title in the HeyGen dashboard */
+  title: string;
+  /** Engines the look supports (from listAvatars) — picks the best */
+  supportedEngines?: string[];
+}
+
+/**
+ * Submit an avatar video render. Returns the v3 video_id to poll.
+ */
+export async function submitRender(opts: SubmitRenderOpts): Promise<string> {
+  // Avatar V is the highest-fidelity engine; request it when supported
+  const engine =
+    opts.supportedEngines?.includes('avatar_v')
+      ? { type: 'avatar_v' }
+      : opts.supportedEngines?.includes('avatar_iv')
+        ? { type: 'avatar_iv' }
+        : undefined;
+
+  const body = (await heygenFetch('/v3/videos', {
     method: 'POST',
     body: JSON.stringify({
-      video_inputs: [
-        {
-          character: {
-            type: 'avatar',
-            avatar_id: opts.avatarId,
-            avatar_style: 'circle',
-          },
-          voice: {
-            type: 'text',
-            input_text: opts.script,
-            voice_id: opts.voiceId,
-          },
-          background:
-            opts.backgroundUrl && /^https?:\/\//.test(opts.backgroundUrl)
-              ? { type: 'image', url: opts.backgroundUrl }
-              : { type: 'color', value: '#0f0f14' },
-        },
-      ],
-      dimension: opts.dimension || '1280x720',
+      type: 'avatar',
+      avatar_id: opts.avatarId,
+      script: opts.script,
+      voice_id: opts.voiceId,
+      title: opts.title,
+      resolution: '1080p',
+      aspect_ratio: opts.aspectRatio,
+      ...(engine ? { engine } : {}),
+      ...(opts.backgroundColor
+        ? { background: { type: 'color', value: opts.backgroundColor } }
+        : {}),
+      // Caption sidecar (SRT) — video stays clean, we control display
+      caption: { file_format: 'srt' },
     }),
   })) as { data?: { video_id?: string } };
+
   const videoId = body.data?.video_id;
   if (!videoId) throw new Error('HeyGen did not return a video_id');
   return videoId;
 }
 
 export interface RenderStatus {
-  status: 'processing' | 'completed' | 'failed' | 'waiting' | 'unknown';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'unknown';
   videoUrl: string | null;
+  thumbnailUrl: string | null;
+  subtitleUrl: string | null;
+  durationSeconds: number | null;
   error: string | null;
 }
 
 /** Poll a render once — callers decide how often. */
 export async function pollRender(videoId: string): Promise<RenderStatus> {
-  const body = (await heygenFetch(`/v1/video_status.get?video_id=${encodeURIComponent(videoId)}`)) as {
-    data?: { status?: string; video_url?: string; error?: unknown };
+  const body = (await heygenFetch(`/v3/videos/${encodeURIComponent(videoId)}`)) as {
+    data?: Record<string, unknown>;
   };
-  const status = body.data?.status;
+  const d = body.data || {};
+  const status = String(d.status || 'unknown');
+
   if (status === 'completed') {
-    return { status: 'completed', videoUrl: body.data?.video_url || null, error: null };
+    return {
+      status: 'completed',
+      videoUrl: (d.video_url as string) || null,
+      thumbnailUrl: (d.thumbnail_url as string) || null,
+      subtitleUrl: (d.subtitle_url as string) || null,
+      durationSeconds: typeof d.duration === 'number' ? d.duration : null,
+      error: null,
+    };
   }
   if (status === 'failed') {
     return {
       status: 'failed',
       videoUrl: null,
+      thumbnailUrl: null,
+      subtitleUrl: null,
+      durationSeconds: null,
       error:
-        typeof body.data?.error === 'string'
-          ? body.data.error
-          : 'HeyGen render failed (check credits — avatar video needs a paid tier or credits)',
+        (d.failure_message as string) ||
+        (d.failure_code as string) ||
+        'HeyGen render failed (check wallet balance — avatar video is metered)',
     };
   }
-  return { status: status === 'processing' ? 'processing' : 'unknown', videoUrl: null, error: null };
+  if (status === 'pending' || status === 'processing') {
+    return {
+      status,
+      videoUrl: null,
+      thumbnailUrl: null,
+      subtitleUrl: null,
+      durationSeconds: null,
+      error: null,
+    };
+  }
+  return {
+    status: 'unknown',
+    videoUrl: null,
+    thumbnailUrl: null,
+    subtitleUrl: null,
+    durationSeconds: null,
+    error: `Unexpected status: ${status}`,
+  };
 }

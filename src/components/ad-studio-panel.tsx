@@ -48,12 +48,14 @@ interface HeygenAvatar {
   avatar_id: string;
   name: string;
   preview_url: string | null;
+  supported_engines?: string[];
 }
 
 interface HeygenVoice {
   voice_id: string;
   name: string;
   language: string;
+  preview_url?: string | null;
 }
 
 export function AdStudioPanel({
@@ -95,8 +97,13 @@ export function AdStudioPanel({
         setHeygenConfigured(!!json.configured);
         setAvatars(json.avatars || []);
         setVoices(json.voices || []);
-        if (json.avatars?.[0]) setAvatarId((prev) => prev || json.avatars[0].avatar_id);
-        if (json.voices?.[0]) setVoiceId((prev) => prev || json.voices[0].voice_id);
+        // Default to Bobbie's newest avatar + her voice clone when present
+        const bobbieAvatar = json.avatars?.find((a: HeygenAvatar) => a.avatar_id === '299c640197c34baab213ec824af9be0e');
+        const bobbieVoice = json.voices?.find((v: HeygenVoice) => v.voice_id === '1a1f098a6d3949f6aa0e225f42999989');
+        if (bobbieAvatar) setAvatarId((prev) => prev || bobbieAvatar.avatar_id);
+        else if (json.avatars?.[0]) setAvatarId((prev) => prev || json.avatars[0].avatar_id);
+        if (bobbieVoice) setVoiceId((prev) => prev || bobbieVoice.voice_id);
+        else if (json.voices?.[0]) setVoiceId((prev) => prev || json.voices[0].voice_id);
       })
       .catch(() => setHeygenConfigured(false));
     return () => { cancelled = true; };
@@ -165,10 +172,16 @@ export function AdStudioPanel({
     }
     setRendering(true);
     try {
+      const chosen = avatars.find((a) => a.avatar_id === avatarId);
       const res = await fetch(`/api/generate/${projectId}/ad/render`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatarId, voiceId, dimension }),
+        body: JSON.stringify({
+          avatarId,
+          voiceId,
+          dimension,
+          supportedEngines: chosen?.supported_engines,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Render submission failed');
@@ -304,6 +317,13 @@ export function AdStudioPanel({
                             <option key={a.avatar_id} value={a.avatar_id}>{a.name}</option>
                           ))}
                         </select>
+                        {(() => {
+                          const chosen = avatars.find((a) => a.avatar_id === avatarId);
+                          return chosen?.preview_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={chosen.preview_url} alt={chosen.name} className="mt-2 w-12 h-12 rounded-full border border-fuchsia-400/30 object-cover" />
+                          ) : null;
+                        })()}
                       </label>
                       <label className="block">
                         <span className="text-[11px] text-white/40 flex items-center gap-1"><Volume2 className="w-3 h-3" /> Voice</span>
@@ -316,6 +336,18 @@ export function AdStudioPanel({
                             <option key={v.voice_id} value={v.voice_id}>{v.name} ({v.language})</option>
                           ))}
                         </select>
+                        {(() => {
+                          const chosen = voices.find((v) => v.voice_id === voiceId);
+                          return chosen?.preview_url ? (
+                            <button
+                              type="button"
+                              onClick={() => new Audio(chosen.preview_url!).play().catch(() => {})}
+                              className="mt-2 text-xs text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-2"
+                            >
+                              ▶ preview voice
+                            </button>
+                          ) : null;
+                        })()}
                       </label>
                     </div>
                     <div className="flex items-center gap-2">
