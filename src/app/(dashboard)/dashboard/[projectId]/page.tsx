@@ -16,6 +16,7 @@ import AppKeysPanel from '@/components/app-keys';
 import BuildFlowBar from '@/components/build-flow-bar';
 import ProjectJourneyMenu from '@/components/project-journey-menu';
 import { useProjectFlow } from '@/components/use-project-flow';
+import { AdStudioPanel } from '@/components/ad-studio-panel';
 import { agentName } from '@/lib/agents/types';
 
 interface AgentActivity {
@@ -64,6 +65,24 @@ interface ProjectData {
         voice: string;
         tagline: string;
         generated_at: string;
+      } | null;
+      ad?: {
+        length: number;
+        angle: string;
+        script: string;
+        scenes: Array<{
+          scene: number;
+          narration: string;
+          caption: string;
+          visual: string;
+          background: string;
+          accent: string;
+          motion: string;
+        }>;
+        hashtags: string[];
+        platforms: string[];
+        generated_at: string;
+        render_status: string;
       } | null;
       requiredApis?: Array<{ provider: string; reason: string; envVars: string[]; signupUrl: string; costNote: string; required: boolean }>;
     } | null;
@@ -563,6 +582,15 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Ad Studio — script + storyboard ad kit (Trupeer × Make smoosh) */}
+            {state.status === 'done' && (
+              <AdStudioPanel
+                projectId={projectId}
+                appName={state.name}
+                existingAd={state.specs?.ad ?? null}
+              />
             )}
 
             {/* Test results */}
