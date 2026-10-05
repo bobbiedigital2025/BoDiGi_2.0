@@ -81,6 +81,24 @@ export async function POST(request: NextRequest) {
         console.error('Revenue ledger write failed:', ledgerErr);
       }
 
+      // ─── Pay-per-video: Ad Studio render purchase ───
+      if (session.metadata?.kind === 'ad_render_purchase') {
+        const purchaseId = session.metadata.purchase_id;
+        if (purchaseId) {
+          await supabase
+            .from('video_render_purchases')
+            .update({ status: 'paid', paid_at: new Date().toISOString() })
+            .eq('id', Number(purchaseId))
+            .eq('status', 'pending'); // idempotent — retries can't double-pay
+
+          console.log(`Ad render purchase ${purchaseId} paid — queuing render`);
+          // The render itself is kicked off by the dashboard polling the
+          // purchase status (or a cron), so the webhook stays fast and never
+          // holds Stripe open on a 20–45min video job.
+        }
+        break;
+      }
+
       // ─── Template marketplace purchase ───
       if (session.metadata?.kind === 'template_purchase') {
         const purchaseId = session.metadata.purchase_id;

@@ -72,6 +72,8 @@ export function AdStudioPanel({
   const [length, setLength] = useState<15 | 30 | 60>(30);
   const [angle, setAngle] = useState('');
   const [copied, setCopied] = useState(false);
+  const [videoTier, setVideoTier] = useState<'short' | 'long'>('short');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // HeyGen state
@@ -84,6 +86,14 @@ export function AdStudioPanel({
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Probe session role once: admin (owner) renders free; subscribers pay
+  useEffect(() => {
+    fetch('/api/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => { if (json?.role === 'admin') setIsAdmin(true); })
+      .catch(() => {});
+  }, []);
 
   // Load avatar inventory once when an ad exists and HeyGen may be configured
   useEffect(() => {
@@ -173,20 +183,39 @@ export function AdStudioPanel({
     setRendering(true);
     try {
       const chosen = avatars.find((a) => a.avatar_id === avatarId);
-      const res = await fetch(`/api/generate/${projectId}/ad/render`, {
+      const payload = {
+        avatarId,
+        voiceId,
+        dimension,
+        supportedEngines: chosen?.supported_engines,
+        tier: videoTier,
+      };
+
+      if (isAdmin) {
+        // Admin (owner testing) renders directly, no charge
+        const res = await fetch(`/api/generate/${projectId}/ad/render`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Render submission failed');
+        setAd((prev) => prev ? { ...prev, render_status: 'rendering' } : prev);
+        startPolling(json.videoId);
+        return;
+      }
+
+      // Subscribers go through Stripe pay-per-video checkout first.
+      // The render only starts after payment clears (webhook → 'paid').
+      const res = await fetch(`/api/generate/${projectId}/ad/render/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          avatarId,
-          voiceId,
-          dimension,
-          supportedEngines: chosen?.supported_engines,
-        }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Render submission failed');
-      setAd((prev) => prev ? { ...prev, render_status: 'rendering' } : prev);
-      startPolling(json.videoId);
+      if (!res.ok) throw new Error(json.error || 'Checkout failed');
+      setRendering(false);
+      if (json.checkoutUrl) window.location.href = json.checkoutUrl;
     } catch (e) {
       setRendering(false);
       setRenderError(e instanceof Error ? e.message : 'Render submission failed');
