@@ -26,6 +26,7 @@ import { checkModifyQuota, checkAppAiQuota } from '@/lib/quota';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
 import { callAI, hasAIKey, setUsageContext } from '@/lib/agents/ai-client';
+import { learnFromModification } from '@/lib/agents/build-memory';
 import type { GeneratedFile } from '@/lib/agents/types';
 
 const FORBIDDEN_PATH = /(^|\/)(\.env|.*auth.*|.*middleware.*|schema\.sql|seed\.sql|api\/.*route\.ts)/i;
@@ -299,6 +300,10 @@ Return the JSON with only the files that need to change.`;
     level: 'info',
     message: `MOD-APPLIED: ${validEdits.map((e) => e.summary || e.path).join(' | ').slice(0, 500)}`,
   });
+
+  // Build memory: every modification teaches the pipeline what users actually
+  // want, so the next build gets it right by default. Never blocks the response.
+  learnFromModification(projectId, instruction, validEdits.map((e) => e.path)).catch(() => undefined);
 
   // Bust the cached preview render so the edit shows on next load
   revalidatePath(`/preview/${projectId}`);

@@ -13,6 +13,7 @@
 import type { ProjectSpecs, ArchitectureDoc, GeneratedFile, AgentRole } from './types';
 import { hasAIKey, callAI } from './ai-client';
 import { hasLettaKey, callLettaAgent } from './letta-client';
+import { withLearnedRules } from './build-memory';
 import { designBriefFor } from './design-briefs';
 
 // ─── Database Agent ────────────────────────────────────────────────
@@ -724,7 +725,7 @@ export async function runDatabaseAgent(
   // Primary path: persistent Letta agent (learns across projects)
   if (hasLettaKey()) {
     try {
-      const raw = await callLettaAgent('database', buildDatabasePrompt(input));
+      const raw = await callLettaAgent('database', await withLearnedRules('database', buildDatabasePrompt(input)));
       const result = { files: extractFiles(raw, 'database') };
       if (result.files.length > 0) return result;
       log('warn', 'Letta database agent returned no files, falling back');
@@ -735,7 +736,7 @@ export async function runDatabaseAgent(
   // Secondary path: Telnyx inference
   if (hasAIKey()) {
     try {
-      const raw = await callAI(DATABASE_AGENT_SYSTEM_PROMPT, buildDatabasePrompt(input));
+      const raw = await callAI(DATABASE_AGENT_SYSTEM_PROMPT, await withLearnedRules('database', buildDatabasePrompt(input)), 'database');
       return { files: extractFiles(raw, 'database') };
     } catch (err) {
       log('warn', `AI call failed, using default database files: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -763,7 +764,7 @@ export async function runBackendAgent(
   // Primary path: persistent Letta agent (learns across projects)
   if (hasLettaKey()) {
     try {
-      const raw = await callLettaAgent('backend', buildBackendPrompt(input));
+      const raw = await callLettaAgent('backend', await withLearnedRules('backend', buildBackendPrompt(input)));
       const result = { files: extractFiles(raw, 'backend') };
       if (result.files.length > 0) return result;
       log('warn', 'Letta backend agent returned no files, falling back');
@@ -774,7 +775,7 @@ export async function runBackendAgent(
   // Secondary path: Telnyx inference
   if (hasAIKey()) {
     try {
-      const raw = await callAI(BACKEND_AGENT_SYSTEM_PROMPT, buildBackendPrompt(input));
+      const raw = await callAI(BACKEND_AGENT_SYSTEM_PROMPT, await withLearnedRules('backend', buildBackendPrompt(input)), 'backend');
       return { files: extractFiles(raw, 'backend') };
     } catch (err) {
       log('warn', `AI call failed, using default backend files: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -810,7 +811,7 @@ export async function runFrontendAgent(
   // Primary path: persistent Letta agent (learns across projects)
   if (hasLettaKey()) {
     try {
-      const raw = await callLettaAgent('frontend', buildFrontendPrompt(input));
+      const raw = await callLettaAgent('frontend', await withLearnedRules('frontend', buildFrontendPrompt(input)));
       const result = { files: extractFiles(raw, 'frontend') };
       if (result.files.length > 0) return result;
       log('warn', 'Letta frontend agent returned no files, falling back');
@@ -821,7 +822,7 @@ export async function runFrontendAgent(
   // Secondary path: Telnyx inference
   if (hasAIKey()) {
     try {
-      const raw = await callAI(FRONTEND_AGENT_SYSTEM_PROMPT, buildFrontendPrompt(input));
+      const raw = await callAI(FRONTEND_AGENT_SYSTEM_PROMPT, await withLearnedRules('frontend', buildFrontendPrompt(input)), 'frontend');
       return { files: extractFiles(raw, 'frontend') };
     } catch (err) {
       log('warn', `AI call failed, using default frontend files: ${err instanceof Error ? err.message : 'unknown'}`);

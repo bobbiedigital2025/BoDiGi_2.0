@@ -43,6 +43,7 @@ import {
   runFrontendAgent,
 } from './codegen-agents';
 import { runTestingAgent, runComplianceAgent, runDocsAgent, runDevOpsAgent } from './qa-agents';
+import { reflectOnBuild } from './build-memory';
 import { hasAIKey, callAI, getAIStatus, setUsageContext } from './ai-client';
 import { hasLettaKey, callLettaAgent, callWithFallback, getLettaStatus } from './letta-client';
 import type { ProjectState, GeneratedFile } from './types';
@@ -367,6 +368,25 @@ Rules: rate limits and timeouts ARE retriable (retry with backoff). AI parse err
     } catch (err) {
       console.error(`Failed to save final project state to Supabase:`, err);
     }
+  }
+
+  // Build memory: extract lessons from this build (fallbacks, retries,
+  // structure) so the next build starts smarter. Fire-and-forget — the
+  // build is done; memory is a bonus, never a failure.
+  try {
+    const warnLogs = (finalState.logs || [])
+      .filter((l) => l.level === 'warn' || l.level === 'error')
+      .map((l) => `${l.agent}: ${l.message}`)
+      .slice(-10);
+    void reflectOnBuild(
+      projectId,
+      finalState.specs?.summary || '',
+      project.files.map((f) => f.path),
+      warnLogs,
+      (level, msg) => orchestrator.log('docs', level, msg)
+    ).catch(() => undefined);
+  } catch {
+    // non-fatal
   }
 }
 

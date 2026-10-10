@@ -60,11 +60,16 @@ export function getAIStatus(): { connected: boolean; model: string; label: strin
  * Returns the raw text content of the response.
  * Throws on API errors — callers should catch and fall back.
  */
-export async function callAI(systemPrompt: string, userPrompt: string): Promise<string> {
+export async function callAI(systemPrompt: string, userPrompt: string, role?: string): Promise<string> {
   const provider = getProvider();
   if (!provider) {
     throw new Error('No AI provider configured (set OPENROUTER_API_KEY or TELNYX_API_KEY)');
   }
+
+  // Per-role model override: AI_MODEL_FRONTEND / AI_MODEL_BACKEND / AI_MODEL_DATABASE
+  // let codegen run a stronger model while docs/summary calls stay on the default.
+  const roleModel = role ? process.env[`AI_MODEL_${role.toUpperCase()}`] : undefined;
+  const model = roleModel || provider.model;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90000); // 90s max per call
@@ -84,7 +89,7 @@ export async function callAI(systemPrompt: string, userPrompt: string): Promise<
     headers,
     signal: controller.signal,
     body: JSON.stringify({
-      model: provider.model,
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
