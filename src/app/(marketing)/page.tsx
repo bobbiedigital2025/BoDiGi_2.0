@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, ArrowRight, Zap, Shield, Code2, Rocket, Brain, CheckCircle2, LogOut, FileText, SearchCheck, MonitorSmartphone, Wallet, Clock, Users } from 'lucide-react';
+import { Sparkles, ArrowRight, Zap, Shield, Code2, Rocket, Brain, CheckCircle2, LogOut, FileText, SearchCheck, MonitorSmartphone, Wallet, Clock, Users, MessageSquareText, Megaphone, Globe } from 'lucide-react';
 import { useAuth } from '@/lib/supabase/auth-context';
 import StardustBackground from '@/components/stardust';
 import { TermsGate } from '@/components/terms-gate';
@@ -257,6 +257,21 @@ export default function LandingPage() {
                 title: 'The full source code',
                 desc: 'When you upgrade, everything is yours: download the ZIP or push to GitHub. No lock-in, no ransom — it deploys anywhere.',
               },
+              {
+                icon: MessageSquareText,
+                title: 'Change anything by asking',
+                desc: 'Modify Pass lets you edit your app in plain English — "make the header dark blue," "add a settings page." Every edit is snapshotted first, and the platform learns from it.',
+              },
+              {
+                icon: Globe,
+                title: 'Live on your own hosting',
+                desc: 'One click deploys to your own Vercel account — your domain, your control. Revoke access anytime; the app keeps running without us.',
+              },
+              {
+                icon: Megaphone,
+                title: 'Marketing kit & AI-made ads',
+                desc: 'Pro builds ship with a 30-day marketing plan, launch posts, and email sequences. Ad Studio turns your app into a video ad with an AI presenter — ready for TikTok and Reels.',
+              },
             ].map((item, i) => (
               <Card key={i}>
                 <CardContent className="p-6">
@@ -277,7 +292,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {[
               { icon: Brain, title: '1. You describe it', desc: 'One prompt. Plain English. No specs, no wireframes, no technical knowledge needed.' },
-              { icon: Users, title: '2. The AI team builds', desc: 'Nine specialized agents handle product, architecture, code, tests, and compliance — in parallel.' },
+              { icon: Users, title: '2. The AI team builds', desc: 'Eleven specialized agents handle product, architecture, code, tests, and compliance — and the platform learns from every build, so each app starts smarter than the last.' },
               { icon: Rocket, title: '3. You preview it live', desc: 'Click through your working app the same day. Read your pitch doc and reality check.' },
               { icon: Wallet, title: '4. You own it', desc: 'Upgrade to download the code, keep your app live, and launch for real. It\'s yours forever.' },
             ].map((step, i) => (
@@ -350,6 +365,9 @@ export default function LandingPage() {
               'Complete documentation for future developers',
               'Your app runs on your own API keys — you control costs',
               'No lock-in: your code deploys anywhere',
+              'Build Memory — learns from every build and edit, so the next app starts smarter',
+              'Modify Pass with snapshot-and-rollback safety on every edit',
+              'Ad Studio — AI avatar video ads for your app, rendered in minutes',
             ].map((feature, i) => (
               <div key={i} className="flex items-center gap-3 text-sm text-white/70">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
@@ -357,6 +375,21 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Straight talk — the honest promise */}
+        <section className="max-w-3xl mx-auto px-6 py-16">
+          <Card className="border-amber-500/20 bg-amber-500/5">
+            <CardContent className="p-8 text-center">
+              <h2 className="text-2xl font-bold mb-3 text-amber-200">One honest promise.</h2>
+              <p className="text-white/60 text-sm leading-relaxed max-w-xl mx-auto">
+                BoDiGi gives you a head start — not a guaranteed business. We build the app, the documents,
+                and the launch tools. The marketing, the customers, and the daily work are yours, and real
+                businesses take real effort. Most ideas die because they never get started.
+                You get to start today — with everything you need already built.
+              </p>
+            </CardContent>
+          </Card>
         </section>
 
         {/* Final CTA */}
@@ -396,6 +429,7 @@ export default function LandingPage() {
               </a>
             </div>
             <p>BoDiGi 2.0 — made by Bobbie Digital. Built with Letta.</p>
+            <p className="mt-2 text-xs text-white/30">BoDiGi 2.0 provides tools and a head start. Using the Service does not guarantee business success or revenue — see our <a href="/terms" className="underline hover:text-white/50">Terms</a>.</p>
             <div className="flex items-center justify-center gap-4 mt-3">
               <a href="/setup" className="hover:text-white/60 transition">Setup Guide</a>
               <a href="/showcase" className="hover:text-white/60 transition">Showcase</a>

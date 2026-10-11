@@ -41,11 +41,17 @@ Plus standalone agents: the Plan Mode interviewer, the Setup Agent (guided API k
 - Full pipeline with fallback generators, project rename, live progress
 
 **Post-build**
+- Build Memory — the pipeline learns generalized rules from every build, every Modify Pass, and every failure, then injects them into future generations (`build_lessons` table + `build-memory.ts`). Each app starts smarter than the last
 - AI modifications (click-to-edit via the modify route)
 - Version history + one-click rollback
 - GitHub export
 - Day-2 Agent — post-launch issue diagnosis and fix PRs
 - Engagement Loop Builder — action→reward loops wired into your app (max 8)
+
+**Ad Studio**
+- AI avatar video ads for your app (HeyGen v3, Avatar V engine, SRT captions, 16:9 + 9:16)
+- Pay-per-video checkout — $4.99 (30s) / $12.99 (1–2 min) via Stripe, render fires only after payment clears
+- 25% of each sale auto-carves into the AI reserve ledger; admins render free
 
 **Deployment**
 - Zero-Key Sandbox — apps work on first deploy with auto-injected test-mode keys; guided handoff to real keys
@@ -92,7 +98,7 @@ Every AI call logs tokens + estimated cost. Every Stripe payment automatically c
 - **Language:** TypeScript
 - **Database:** Supabase (PostgreSQL, Row Level Security)
 - **Auth:** Supabase Auth (email/password, Google, GitHub)
-- **AI:** OpenRouter (default `openai/gpt-4o-mini`, `AI_MODEL` override) with Telnyx fallback — all calls through the `ai-client.ts` abstraction
+- **AI:** OpenRouter (default `openai/gpt-4o-mini`, `AI_MODEL` global override, `AI_MODEL_<ROLE>` per-role overrides for codegen) with Telnyx fallback — all calls through the `ai-client.ts` abstraction
 - **Payments:** Stripe (subscriptions + one-time template purchases)
 - **Email:** Resend
 - **Styling:** Tailwind CSS · **Icons:** Lucide React
@@ -140,7 +146,7 @@ LETTA_API_KEY=your-letta-key
 
 ### Database Setup
 
-Run the SQL migrations in order in your Supabase SQL Editor — `supabase/migrations/001` through `014` (schema, profiles, tiers, showcase, engagement loops, templates, purchases, usage ledger, revenue ledger).
+Run the SQL migrations in order in your Supabase SQL Editor — `supabase/migrations/001` through `017` (schema, profiles, tiers, showcase, engagement loops, templates, purchases, usage ledger, revenue ledger, reverse trial, API key constraints, build memory).
 
 ### Development
 
@@ -164,6 +170,10 @@ Open [http://localhost:3000](http://localhost:3000).
 | `/admin` | Admin panel — users, security audit, accounting |
 | `/pricing` | Subscription plans |
 | `/setup` | API key setup guide |
+
+## A Note on Expectations
+
+BoDiGi 2.0 gives founders a head start — a working app, the documents, and the launch tools. It does not guarantee business success, revenue, or users. Building a real business takes substantial ongoing work on the founder's end: marketing, sales, support, and persistence. See the [Terms of Service](src/app/terms/page.tsx) for the full disclaimer.
 
 ## License
 
