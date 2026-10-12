@@ -448,8 +448,11 @@ export default function LandingPage() {
             setTermsAccepted(true);
             setShowTerms(false);
             if (user) localStorage.setItem(`terms_accepted_${user.id}`, 'true');
-            // Auto-submit after accepting
-            handleSubmit();
+            // Auto-submit after accepting. Must call doSubmit directly:
+            // handleSubmit() would re-read the stale termsAccepted=false
+            // from this render's closure and reopen the gate, forcing
+            // first-time users to click "Let's Build" twice.
+            void doSubmit();
           }}
         />
       )}
