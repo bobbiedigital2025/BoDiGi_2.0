@@ -206,6 +206,18 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
     };
   }, [projectId]);
 
+  // Hook order must be stable across renders — calling hooks below the
+  // early returns crashes with React #310 ("rendered more hooks") as soon
+  // as the first poll resolves. Safe defaults keep the loading render fine:
+  // empty status reads as step 1, and nothing consumes `flow` until data
+  // is on screen.
+  const flow = useProjectFlow(
+    projectId,
+    data?.state?.status ?? '',
+    data?.state?.specs?.requiredApis,
+    data?.deploymentUrl,
+  );
+
   if (error) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -232,7 +244,6 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
   }
 
   const { state, progress, agentActivity } = data;
-  const flow = useProjectFlow(projectId, state.status, state.specs?.requiredApis, data.deploymentUrl);
   // From the Live Preview tab, "add keys" must first flip back to the
   // pipeline view (that's where the panel lives) — otherwise the button
   // scrolls to nothing and looks dead.
