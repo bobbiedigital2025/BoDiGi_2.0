@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run lint -- --quiet || echo LINT-NONBLOCKING: lint errors present, see output above",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
