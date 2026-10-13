@@ -425,7 +425,13 @@ Rules: rate limits and timeouts ARE retriable (retry with backoff). AI parse err
     // they completed (the "tasks never flip to done" quirk), and the
     // dashboard saw a dead build.
     if (userId && hasSupabase()) {
-      saveProject(userId, projectId, orchestrator.getState(), project.files, orchestrator.getProgress())
+      // Awaited, not fire-and-forget: saveProject replaces project_logs
+      // (delete + full insert), and two overlapping saves interleave as
+      // delete+delete → insert+insert — every log line exactly 2x in the
+      // table (observed on chained relay builds, where the final-on-chain
+      // save overlapped the previous task's still-running incremental save).
+      // The loop is AI-latency-bound; the extra ~200ms per task is nothing.
+      await saveProject(userId, projectId, orchestrator.getState(), project.files, orchestrator.getProgress())
         .catch((err) => console.error('Incremental project save failed:', err));
     }
     }
