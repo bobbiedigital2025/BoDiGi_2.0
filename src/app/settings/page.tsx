@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { ApiKeysSection } from '@/components/api-keys-section';
@@ -165,7 +166,7 @@ export default function SettingsPage() {
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <h1 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 800 }}>Settings</h1>
-          <a href="/dashboard" style={{ color: '#888', fontSize: '0.875rem', textDecoration: 'none' }}>← Dashboard</a>
+          <Link href="/dashboard" style={{ color: '#888', fontSize: '0.875rem', textDecoration: 'none' }}>← Dashboard</Link>
         </div>
 
         {/* ============ TAB BAR ============ */}
@@ -254,7 +255,7 @@ export default function SettingsPage() {
         {tab === 'features' && (
           <div style={card}>
             <h2 style={h2}>Features</h2>
-            <div style={{ ...muted, marginBottom: '0.75rem' }}>What's on for your plan — and what unlocks above it.</div>
+            <div style={{ ...muted, marginBottom: '0.75rem' }}>What&apos;s on for your plan — and what unlocks above it.</div>
             {features.map((f) => {
               const unlocked = has(f.need);
               return (
