@@ -7,10 +7,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createProject, listProjectsForUser } from '@/lib/agents/pipeline';
+import { waitUntil } from '@vercel/functions';
+import { createProject, listProjectsForUser, getPipelineRun } from '@/lib/agents/pipeline';
+import { sweepStaleBuilds } from '@/lib/agents/stale-builds';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { checkBuildQuota } from '@/lib/quota';
+
+// Builds run long multi-agent pipelines — keep the function alive for the
+// full allowed window instead of the default 60s.
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,6 +69,12 @@ export async function POST(request: NextRequest) {
 
     const projectId = createProject(sanitized, user.id);
 
+    // Keep this function instance alive until the pipeline settles.
+    // Fire-and-forget without waitUntil is what let Vercel freeze builds
+    // mid-run and leave them in 'building' forever.
+    const run = getPipelineRun(projectId);
+    if (run) waitUntil(run);
+
     return NextResponse.json({
       projectId,
       message: 'Project created. Agent team is starting...',
@@ -82,6 +94,11 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ projects: [] });
   }
+
+  // Watchdog: flip any builds whose runner died >15 min ago to failed so
+  // the dashboard never shows an infinite spinner. One cheap select when
+  // nothing is stale.
+  waitUntil(sweepStaleBuilds().catch(() => 0));
 
   const projects = await listProjectsForUser(user.id);
   return NextResponse.json({ projects });

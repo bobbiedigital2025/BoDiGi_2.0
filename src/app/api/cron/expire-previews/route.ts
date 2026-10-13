@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendExpiryWarningEmail } from '@/lib/email';
+import { sweepStaleBuilds } from '@/lib/agents/stale-builds';
 
 export async function GET(request: NextRequest) {
   // Verify cron secret (Vercel sets this header automatically for cron jobs)
@@ -33,10 +34,16 @@ export async function GET(request: NextRequest) {
     backfilled: 0,
     expired: 0,
     warningsSent: 0,
+    stalledBuildsFailed: 0,
     errors: [] as string[],
   };
 
   try {
+    // Backstop watchdog: flip builds whose runner was interrupted and never
+    // saved again (>15 min stale) to failed. The dashboard routes sweep on
+    // every load too — this is the daily safety net for quiet periods.
+    results.stalledBuildsFailed = await sweepStaleBuilds().catch(() => 0);
+
     // 1. Backfill: free-tier projects with no expiry set → set to 7 days from creation
     const { data: noExpiry, error: backfillError } = await supabase
       .from('projects')

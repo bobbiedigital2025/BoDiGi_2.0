@@ -46,6 +46,7 @@ import { runTestingAgent, runComplianceAgent, runDocsAgent, runDevOpsAgent } fro
 import { reflectOnBuild } from './build-memory';
 import { hasAIKey, callAI, getAIStatus, setUsageContext } from './ai-client';
 import { hasLettaKey, callLettaAgent, callWithFallback, getLettaStatus } from './letta-client';
+import { markBuildFailed } from './stale-builds';
 import type { ProjectState, GeneratedFile } from './types';
 import { hasSupabase } from '../supabase/server';
 import { saveProject, loadProjectFromSupabase, listUserProjects } from '../supabase/project-store';
@@ -59,6 +60,7 @@ declare global {
     state: ProjectState;
     files: GeneratedFile[];
     userId?: string;
+    run?: Promise<void>;
   }> | undefined;
 }
 
@@ -413,12 +415,31 @@ export function createProject(idea: string, userId?: string): string {
     });
   }
 
-  // Start the pipeline asynchronously
-  executePipeline(projectId, idea, userId).catch((err) => {
+  // Start the pipeline asynchronously. The returned promise is stashed on
+  // the store entry so the API route can hand it to Vercel's waitUntil —
+  // without that, the serverless function could be frozen mid-build and the
+  // project sat in 'building' forever.
+  const run = executePipeline(projectId, idea, userId).catch((err) => {
     console.error(`Pipeline failed for ${projectId}:`, err);
+    // Persist the crash — otherwise a hard failure leaves the project
+    // stuck in 'building' with no explanation (the stuck-build bug).
+    markBuildFailed(
+      projectId,
+      `Build crashed: ${err instanceof Error ? err.message : 'unknown error'}. Start a new build to retry.`
+    ).catch(() => undefined);
   });
+  store.get(projectId)!.run = run;
 
   return projectId;
+}
+
+/**
+ * Get the in-flight pipeline promise for a project (if this function
+ * instance is the one running it) so routes can keep the serverless
+ * invocation alive with waitUntil until the build settles.
+ */
+export function getPipelineRun(projectId: string): Promise<void> | null {
+  return getStore().get(projectId)?.run ?? null;
 }
 
 /**

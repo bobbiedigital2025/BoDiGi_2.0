@@ -26,12 +26,6 @@ function slugify(name: string): string {
     .slice(0, 80) || 'bodigi-app';
 }
 
-// GitHub contents API: encode each path segment, keep slashes
-// (encodeURIComponent alone would turn src/app/page.tsx into src%2Fapp%2F...)
-function encodeGitPath(path: string): string {
-  return path.split('/').map(encodeURIComponent).join('/');
-}
-
 async function gh(path: string, token: string, init?: RequestInit) {
   const res = await fetch(`${GH_API}${path}`, {
     ...init,
@@ -43,6 +37,30 @@ async function gh(path: string, token: string, init?: RequestInit) {
     },
   });
   return res;
+}
+
+/**
+ * Retry wrapper for GitHub calls that can hit secondary rate limits (429)
+ * or transient 5xx. Small linear backoff — these almost always clear in
+ * a second or two, and the alternative is a lost export.
+ */
+async function ghRetry(path: string, token: string, init?: RequestInit, attempts = 3): Promise<Response> {
+  let last: Response | null = null;
+  for (let i = 0; i < attempts; i++) {
+    const res = await gh(path, token, init);
+    if (res.status !== 429 && res.status < 500) return res;
+    last = res;
+    await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+  }
+  return last!;
+}
+
+function ghJson(init: unknown): RequestInit {
+  return {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(init),
+  };
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
@@ -181,43 +199,96 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const fullName = `${ghUser.login}/${repoName}`;
 
-  // 7. Push every file via the contents API (create-or-update)
-  let pushed = 0;
-  const failures: string[] = [];
+  // 7. Push all files as ONE atomic commit via the Git Trees API.
+  //
+  // The old implementation looped the Contents API per file — 2 API calls
+  // per file (GET sha + PUT), one commit per file. On bigger apps that hit
+  // GitHub's secondary rate limits mid-loop and dropped files: the classic
+  // "some pages failed to push" bug. Tree + commit + ref update is ~4 calls
+  // total, all-or-nothing: partial exports are now impossible.
 
-  for (const file of files) {
-    // Normalize path — strip leading slashes so it's relative
-    const path = file.path.replace(/^\/+/, '');
-    const content = Buffer.from(file.content, 'utf-8').toString('base64');
+  // Learn the default branch (main for auto_init repos; a pre-existing repo
+  // could use anything).
+  const repoInfo = await ghRetry(`/repos/${fullName}`, token);
+  const repoJson = repoInfo.ok ? ((await repoInfo.json()) as { default_branch?: string }) : {};
+  const branch = repoJson.default_branch || 'main';
 
-    // Check if file exists to get its SHA (needed for updates)
-    const checkRes = await gh(`/repos/${fullName}/contents/${encodeGitPath(path)}`, token);
-    let sha: string | undefined;
-    if (checkRes.ok) {
-      const existing = await checkRes.json();
-      sha = existing.sha;
+  // Base commit + tree, if the repo already has history (auto_init gives it
+  // one; a manually-created empty repo has none — handled below).
+  let baseSha: string | null = null;
+  let baseTree: string | undefined;
+  const refRes = await ghRetry(`/repos/${fullName}/git/ref/heads/${branch}`, token);
+  if (refRes.ok) {
+    const refJson = (await refRes.json()) as { object?: { sha?: string } };
+    baseSha = refJson.object?.sha ?? null;
+  }
+  if (baseSha) {
+    const baseCommitRes = await ghRetry(`/repos/${fullName}/git/commits/${baseSha}`, token);
+    if (baseCommitRes.ok) {
+      baseTree = ((await baseCommitRes.json()) as { tree?: { sha?: string } }).tree?.sha;
     }
+  }
 
-    const putRes = await gh(`/repos/${fullName}/contents/${encodeGitPath(path)}`, token, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: `BoDiGi 2.0 export: add ${path}`,
-        content,
-        ...(sha ? { sha } : {}),
-      }),
-    });
+  // One tree containing every file (utf-8 content inline — no per-file
+  // blobs, no base64, no URL-encoding edge cases).
+  const treeRes = await ghRetry(`/repos/${fullName}/git/trees`, token, ghJson({
+    ...(baseTree ? { base_tree: baseTree } : {}),
+    tree: files.map((file) => ({
+      path: file.path.replace(/^\/+/, ''),
+      mode: '100644',
+      type: 'blob',
+      content: file.content,
+    })),
+  }));
+  if (!treeRes.ok) {
+    const detail = (await treeRes.text()).slice(0, 200);
+    return NextResponse.json(
+      { error: `GitHub rejected the file tree (${treeRes.status}). ${detail}` },
+      { status: 502 }
+    );
+  }
+  const treeSha = ((await treeRes.json()) as { sha: string }).sha;
 
-    if (putRes.ok) pushed += 1;
-    else failures.push(path);
+  // One commit pointing at that tree.
+  const commitRes = await ghRetry(`/repos/${fullName}/git/commits`, token, ghJson({
+    message: `BoDiGi 2.0 export: ${projectName}`,
+    tree: treeSha,
+    ...(baseSha ? { parents: [baseSha] } : {}),
+  }));
+  if (!commitRes.ok) {
+    const detail = (await commitRes.text()).slice(0, 200);
+    return NextResponse.json(
+      { error: `GitHub rejected the export commit (${commitRes.status}). ${detail}` },
+      { status: 502 }
+    );
+  }
+  const commitSha = ((await commitRes.json()) as { sha: string }).sha;
+
+  // Move the branch pointer (or create it for a previously-empty repo).
+  const updateRefRes = baseSha
+    ? await ghRetry(`/repos/${fullName}/git/refs/heads/${branch}`, token, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sha: commitSha }),
+      })
+    : await ghRetry(`/repos/${fullName}/git/refs`, token, ghJson({
+        ref: `refs/heads/${branch}`,
+        sha: commitSha,
+      }));
+  if (!updateRefRes.ok) {
+    const detail = (await updateRefRes.text()).slice(0, 200);
+    return NextResponse.json(
+      { error: `GitHub couldn't update the ${branch} branch (${updateRefRes.status}). ${detail}` },
+      { status: 502 }
+    );
   }
 
   return NextResponse.json({
     success: true,
     repo: `https://github.com/${fullName}`,
     repoName: fullName,
-    pushed,
-    failed: failures.length,
-    failures: failures.slice(0, 10),
+    pushed: files.length,
+    failed: 0,
+    failures: [],
   });
 }

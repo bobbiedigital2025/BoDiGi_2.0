@@ -7,7 +7,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { getProject, getProjectFromSupabase } from '@/lib/agents/pipeline';
+import { sweepStaleBuilds } from '@/lib/agents/stale-builds';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { getAIStatus } from '@/lib/agents/ai-client';
 import { hasLettaKey } from '@/lib/agents/letta-client';
@@ -80,6 +82,11 @@ export async function GET(
   if (!user) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
+
+  // Watchdog: the dashboard polls this route during builds, making it the
+  // earliest possible place to catch a dead runner. Flips stalled builds
+  // (>15 min without a save) to failed so users see the truth + can retry.
+  waitUntil(sweepStaleBuilds().catch(() => 0));
 
   // User-triggered Vercel deploys persist their URL on the projects row —
   // read it once and hand it to every branch so the dashboard can show
