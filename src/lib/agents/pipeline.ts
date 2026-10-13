@@ -166,6 +166,13 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
           await saveProject(userId, projectId, orchestrator.getState(), project.files, orchestrator.getProgress())
             .catch(() => undefined);
         }
+        // Release the in-process run stash BEFORE the handoff. Vercel reuses
+        // warm instances, so the child invocation can land on THIS instance
+        // while we are still alive awaiting its response — and
+        // rehydrateProjectForResume no-ops as a "duplicate link" whenever it
+        // sees a stashed run. Clearing it here guarantees the child
+        // rehydrates from the state we just saved and continues the relay.
+        project.run = undefined;
         await chainToFreshWindow(projectId, chainDepth);
         return;
       }
