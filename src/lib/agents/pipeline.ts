@@ -79,7 +79,7 @@ function getStore() {
 // re-enters the loop (completed tasks are skipped). Chaining always happens
 // BETWEEN tasks, never mid-task: a mid-task death is the stuck-build bug.
 // 15s of the window is reserved for the save + handoff fetch.
-const PIPELINE_HARD_STOP_MS = 90_000; // TEMP relay-forcing test — restore to 285_000 after verification
+const PIPELINE_HARD_STOP_MS = 285_000;
 // Conservative per-role runtime estimates. Wrong estimates degrade
 // gracefully: an overestimate costs an extra chain hop (~1s), an
 // underestimate risks a mid-task death — so these lean generous.
@@ -165,7 +165,12 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
       // hand off to a fresh invocation, which re-enters this loop and skips
       // completed tasks. Never start a task that would die mid-call.
       const taskEstimate = ROLE_TIME_ESTIMATE_MS[task.role] ?? DEFAULT_TASK_ESTIMATE_MS;
-      if (Date.now() - pipelineStart + taskEstimate > PIPELINE_HARD_STOP_MS) {
+      // Never chain for a task that could not fit in a FRESH window
+      // (taskEstimate >= HARD_STOP): every child would instantly re-chain
+      // forever — Vercel's 508 loop protection cut exactly that cascade in
+      // the 90s-stop relay test. Running it is the lesser risk.
+      const canFitInFreshWindow = taskEstimate < PIPELINE_HARD_STOP_MS;
+      if (canFitInFreshWindow && Date.now() - pipelineStart + taskEstimate > PIPELINE_HARD_STOP_MS) {
         if (chainDepth >= MAX_CHAIN_DEPTH) {
           orchestrator.log('devops', 'error',
             `Relay chain depth ${chainDepth} reached — stopping handoffs. Watchdog will mark the build failed if it stalls.`);
