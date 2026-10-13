@@ -116,6 +116,11 @@ async function chainToFreshWindow(projectId: string, chainDepth: number): Promis
     const res = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.CRON_SECRET ?? ''}` },
+      // Never follow redirects: the platform protection wall answers a POST
+      // with a 302 to its SSO page, and a followed redirect returns a 200
+      // HTML login page that masquerades as our route's no-op. With
+      // 'manual', an interception reports itself as a 3xx in the handoff log.
+      redirect: 'manual',
     });
     if (!res.ok) {
       console.error(`Resume chain for ${projectId} got HTTP ${res.status} — watchdog will recover if the build stalls`);
