@@ -20,9 +20,9 @@ export default [
       parser: tsParser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
-    // @next registered so in-source eslint-disable comments for @next/*
+    // @next/next registered so in-source eslint-disable comments for @next/*
     // rules resolve (they error as "rule not found" otherwise).
-    plugins: { ...preset.plugins, '@next': nextPlugin },
+    plugins: { ...preset.plugins, '@next/next': nextPlugin },
     rules: preset.rules,
   },
 ];
