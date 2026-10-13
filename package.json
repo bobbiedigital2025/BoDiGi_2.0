@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npm run lint -- --quiet || echo LINT-NONBLOCKING: lint errors present, see output above",
+    "lint:ci": "eslint . --config eslint.ci.mjs",
+    "prebuild": "npm run lint:ci && (npm run lint -- --quiet || echo LINT-NONBLOCKING: style errors present, see output above)",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
