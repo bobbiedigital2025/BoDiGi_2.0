@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/supabase/auth-context';
 import {
   ChevronDown, ChevronRight, Settings, LogOut, LayoutDashboard,
@@ -32,6 +32,7 @@ interface NavTicket {
  */
 export function AppNav() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, profile, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [stardustOn, setStardustOn] = useState(true);
@@ -94,6 +95,10 @@ export function AppNav() {
   }, [appsOpen, projectsLoaded, user]);
 
   if (!user) return null;
+  // The preview page has its own sticky header (with the Dashboard escape
+  // link) — and the dashboard's Live Preview iframe loads that same page.
+  // Rendering global chrome there puts a nav bar inside the nav bar.
+  if (pathname?.startsWith('/preview')) return null;
 
   const tier = profile?.tier || 'free';
   const isAdmin = profile?.role === 'admin';

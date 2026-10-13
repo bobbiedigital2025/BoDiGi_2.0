@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Lock, ArrowRight, Download, GitBranch, Globe, Clock } from 'lucide-react';
@@ -38,9 +39,12 @@ const featureInfo: Record<string, { title: string; description: string; icon: Re
 export function Paywall({ feature, currentTier, previewExpiresAt, projectName }: PaywallProps) {
   const info = featureInfo[feature] || featureInfo.export;
   const isFreeTier = currentTier === 'free';
+  // Anchor "now" once at mount — calling Date.now() during render is
+  // impure and trips the React compiler lint.
+  const [now] = useState(() => Date.now());
 
   const daysLeft = previewExpiresAt
-    ? Math.max(0, Math.ceil((new Date(previewExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    ? Math.max(0, Math.ceil((new Date(previewExpiresAt).getTime() - now) / (1000 * 60 * 60 * 24)))
     : null;
 
   return (

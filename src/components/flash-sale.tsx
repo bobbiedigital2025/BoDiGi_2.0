@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 /**
  * Flash sale banner — a REAL limited-time deal with an actual end time.
@@ -15,6 +16,7 @@ import Link from 'next/link';
 export function FlashSale() {
   const [visible, setVisible] = useState(false);
   const [countdown, setCountdown] = useState('');
+  const pathname = usePathname();
 
   const ends = process.env.NEXT_PUBLIC_FLASH_SALE_ENDS;
   const text = process.env.NEXT_PUBLIC_FLASH_SALE_TEXT || 'Flash deal: $10 off any plan';
@@ -48,6 +50,9 @@ export function FlashSale() {
   }, [ends]);
 
   if (!visible) return null;
+  // Same double-chrome rule as AppNav — the preview page (and the dashboard's
+  // Live Preview iframe, which loads it) carries its own header.
+  if (pathname?.startsWith('/preview')) return null;
 
   return (
     <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 text-white">
