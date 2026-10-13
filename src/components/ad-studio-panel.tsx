@@ -82,7 +82,8 @@ export function AdStudioPanel({
   const [voices, setVoices] = useState<HeygenVoice[]>([]);
   const [avatarId, setAvatarId] = useState('');
   const [voiceId, setVoiceId] = useState('');
-  const [dimension, setDimension] = useState<'16:9' | '9:16'>('16:9');
+  // Vertical-first: the ad kits are written for Reels/TikTok/Shorts.
+  const [dimension, setDimension] = useState<'16:9' | '9:16'>('9:16');
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -94,39 +95,6 @@ export function AdStudioPanel({
       .then((json) => { if (json?.role === 'admin') setIsAdmin(true); })
       .catch(() => {});
   }, []);
-
-  // Load avatar inventory once when an ad exists and HeyGen may be configured
-  useEffect(() => {
-    if (!ad) return;
-    let cancelled = false;
-    fetch(`/api/generate/${projectId}/ad/avatars`)
-      .then((r) => r.json())
-      .then((json) => {
-        if (cancelled) return;
-        if (json.error) { setHeygenConfigured(false); return; }
-        setHeygenConfigured(!!json.configured);
-        setAvatars(json.avatars || []);
-        setVoices(json.voices || []);
-        // Default to Bobbie's newest avatar + her voice clone when present
-        const bobbieAvatar = json.avatars?.find((a: HeygenAvatar) => a.avatar_id === '299c640197c34baab213ec824af9be0e');
-        const bobbieVoice = json.voices?.find((v: HeygenVoice) => v.voice_id === '0e5ec9b420054bb2b5fddc630a69999c');
-        if (bobbieAvatar) setAvatarId((prev) => prev || bobbieAvatar.avatar_id);
-        else if (json.avatars?.[0]) setAvatarId((prev) => prev || json.avatars[0].avatar_id);
-        if (bobbieVoice) setVoiceId((prev) => prev || bobbieVoice.voice_id);
-        else if (json.voices?.[0]) setVoiceId((prev) => prev || json.voices[0].voice_id);
-      })
-      .catch(() => setHeygenConfigured(false));
-    return () => { cancelled = true; };
-  }, [projectId, !!ad]);
-
-  // If a render is already in flight (render_status === 'rendering'), resume polling
-  useEffect(() => {
-    if (ad?.render_status === 'rendering' && ad.render?.video_id) {
-      startPolling(ad.render.video_id);
-    }
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ad?.render_status, ad?.render?.video_id]);
 
   const startPolling = (videoId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -154,6 +122,46 @@ export function AdStudioPanel({
       }
     }, 10000);
   };
+
+  const hasAd = !!ad;
+
+  // Load avatar inventory once when an ad exists and HeyGen may be configured
+  useEffect(() => {
+    if (!hasAd) return;
+    let cancelled = false;
+    fetch(`/api/generate/${projectId}/ad/avatars`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return;
+        if (json.error) { setHeygenConfigured(false); return; }
+        setHeygenConfigured(!!json.configured);
+        setAvatars(json.avatars || []);
+        setVoices(json.voices || []);
+        // Default to Bobbie's newest avatar + her voice clone when present
+        const bobbieAvatar = json.avatars?.find((a: HeygenAvatar) => a.avatar_id === '299c640197c34baab213ec824af9be0e');
+        const bobbieVoice = json.voices?.find((v: HeygenVoice) => v.voice_id === '0e5ec9b420054bb2b5fddc630a69999c');
+        if (bobbieAvatar) setAvatarId((prev) => prev || bobbieAvatar.avatar_id);
+        else if (json.avatars?.[0]) setAvatarId((prev) => prev || json.avatars[0].avatar_id);
+        if (bobbieVoice) setVoiceId((prev) => prev || bobbieVoice.voice_id);
+        else if (json.voices?.[0]) setVoiceId((prev) => prev || json.voices[0].voice_id);
+      })
+      .catch(() => setHeygenConfigured(false));
+    return () => { cancelled = true; };
+  }, [projectId, hasAd]);
+
+  // If a render is already in flight (render_status === 'rendering'), resume polling
+  useEffect(() => {
+    if (ad?.render_status !== 'rendering' || !ad.render?.video_id) return;
+    // Deferred a tick: startPolling sets state, and synchronous setState
+    // inside an effect triggers cascading renders (react-hooks error).
+    const videoId = ad.render.video_id;
+    const t = setTimeout(() => startPolling(videoId), 0);
+    return () => {
+      clearTimeout(t);
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ad?.render_status, ad?.render?.video_id]);
 
   const generate = async () => {
     setBusy(true);
@@ -312,7 +320,6 @@ export function AdStudioPanel({
 
                 {ad.render?.video_url && ad.render_status === 'ready' ? (
                   <div className="space-y-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <video
                       src={ad.render.video_url}
                       controls
@@ -330,7 +337,7 @@ export function AdStudioPanel({
                 ) : rendering ? (
                   <div className="flex items-center gap-2 text-sm text-white/60">
                     <Loader2 className="w-4 h-4 animate-spin text-fuchsia-400" />
-                    Rendering your avatar ad… (usually 1–3 minutes)
+                    Rendering your avatar ad… (usually 20–45 minutes — you can leave this page and come back)
                   </div>
                 ) : (
                   <>
@@ -395,8 +402,27 @@ export function AdStudioPanel({
                         </button>
                       ))}
                     </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-white/40">Video length:</span>
+                      {([
+                        { id: 'short', label: '30s · $4.99' },
+                        { id: 'long', label: '1–2 min · $12.99' },
+                      ] as const).map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setVideoTier(t.id)}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                            videoTier === t.id
+                              ? 'border-fuchsia-400 bg-fuchsia-500/15 text-fuchsia-300'
+                              : 'border-white/10 text-white/50 hover:border-white/25'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
                     <Button size="sm" onClick={renderVideo}>
-                      Render avatar video
+                      {isAdmin ? 'Render avatar video' : 'Continue to checkout'}
                     </Button>
                   </>
                 )}
