@@ -103,9 +103,13 @@ const MAX_CHAIN_DEPTH = 10;
  * await only lasts as long as the handoff itself.
  */
 async function chainToFreshWindow(projectId: string, chainDepth: number): Promise<number> {
+  // Hand off via the PUBLIC production URL, never the deployment-specific
+  // VERCEL_URL: deployment URLs can be intercepted by platform protection
+  // layers (the request then never reaches our route at all), while the
+  // production alias is the path we have verified reaches the handler.
   const base =
     process.env.NEXT_PUBLIC_SITE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    process.env.NEXT_PUBLIC_APP_URL ||
     'https://bodigi2.com';
   const url = `${base}/api/generate/${projectId}/resume?depth=${chainDepth + 1}`;
   try {
