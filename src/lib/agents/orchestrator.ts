@@ -606,6 +606,29 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   }
 
   /**
+   * Adopt a persisted state (from Supabase) into a fresh orchestrator.
+   * Used when a build resumes in a new serverless invocation: restores
+   * tasks (with statuses + outputs), specs, architecture, files, and logs
+   * so the pipeline loop picks up exactly where the last invocation ended.
+   *
+   * Tasks that were in_progress or sitting on a retry backoff when the
+   * previous invocation died have no live timers here — flip them back to
+   * pending so the loop re-runs them. retryCount is preserved, so retry
+   * budgets are still honored across the handoff.
+   */
+  adoptState(persisted: ProjectState): void {
+    const tasks = (persisted.tasks || []).map((t) =>
+      t.status === 'in_progress' || t.status === 'retrying'
+        ? { ...t, status: 'pending' as const, startedAt: null }
+        : t
+    );
+    this.state = { ...persisted, tasks };
+    this.taskQueue = [...tasks];
+    this.activeTasks.clear();
+    this.updateState();
+  }
+
+  /**
    * Subscribe to state updates.
    */
   subscribe(listener: (state: ProjectState) => void): () => void {

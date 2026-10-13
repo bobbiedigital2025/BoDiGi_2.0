@@ -47,7 +47,7 @@ import { reflectOnBuild } from './build-memory';
 import { hasAIKey, callAI, getAIStatus, setUsageContext } from './ai-client';
 import { hasLettaKey, callLettaAgent, callWithFallback, getLettaStatus } from './letta-client';
 import { markBuildFailed } from './stale-builds';
-import type { ProjectState, GeneratedFile } from './types';
+import type { ProjectState, GeneratedFile, AgentRole } from './types';
 import { hasSupabase } from '../supabase/server';
 import { saveProject, loadProjectFromSupabase, listUserProjects } from '../supabase/project-store';
 
@@ -71,17 +71,70 @@ function getStore() {
   return globalThis.__appforgeProjects!;
 }
 
+// ─── Relay runner ─────────────────────────────────────────────────────────
+// Vercel kills a serverless function at maxDuration (300s). Long builds need
+// more than one window, so before starting a task the pipeline checks
+// whether that task can plausibly finish in the remaining time — if not, it
+// saves and hands off to a fresh invocation via the /resume route, which
+// re-enters the loop (completed tasks are skipped). Chaining always happens
+// BETWEEN tasks, never mid-task: a mid-task death is the stuck-build bug.
+// 15s of the window is reserved for the save + handoff fetch.
+const PIPELINE_HARD_STOP_MS = 285_000;
+// Conservative per-role runtime estimates. Wrong estimates degrade
+// gracefully: an overestimate costs an extra chain hop (~1s), an
+// underestimate risks a mid-task death — so these lean generous.
+const ROLE_TIME_ESTIMATE_MS: Partial<Record<AgentRole, number>> = {
+  pm: 90_000,
+  architect: 90_000,
+  frontend: 120_000,
+  backend: 180_000, // the long pole — AI-generating the API layer
+  database: 60_000,
+  docs: 90_000,
+};
+const DEFAULT_TASK_ESTIMATE_MS = 60_000;
+// A full build is ~15 tasks; 10 links ≈ 45 minutes of build time. Past that
+// something is wrong — stop chaining and let the stale-build watchdog mark
+// the build failed honestly instead of looping forever.
+const MAX_CHAIN_DEPTH = 10;
+
+/**
+ * Hand the build off to a fresh serverless invocation. The resume route
+ * acknowledges immediately (202) and keeps working via waitUntil, so this
+ * await only lasts as long as the handoff itself.
+ */
+async function chainToFreshWindow(projectId: string, chainDepth: number): Promise<void> {
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    'https://bodigi2.com';
+  const url = `${base}/api/generate/${projectId}/resume?depth=${chainDepth + 1}`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.CRON_SECRET ?? ''}` },
+    });
+    if (!res.ok) {
+      console.error(`Resume chain for ${projectId} got HTTP ${res.status} — watchdog will recover if the build stalls`);
+    }
+  } catch (err) {
+    // The build's state is saved; the stale-build watchdog flips it to
+    // failed (honest) rather than leaving it 'building' forever.
+    console.error(`Resume chain for ${projectId} failed:`, err);
+  }
+}
+
 /**
  * Execute the full pipeline for a project.
  * This runs asynchronously — the dashboard polls for updates.
  */
-export async function executePipeline(projectId: string, idea: string, userId?: string): Promise<void> {
+export async function executePipeline(projectId: string, idea: string, userId?: string, chainDepth = 0): Promise<void> {
   const store = getStore();
   const project = store.get(projectId);
   if (!project) return;
 
   const { orchestrator } = project;
   const tasks = orchestrator.getState().tasks;
+  const pipelineStart = Date.now();
 
   // Helper: simulate work delay
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -95,6 +148,27 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
 
     for (const task of tasks) {
       if (task.status === 'completed' || task.status === 'failed' || task.status === 'retrying') continue;
+
+      // Vercel kills this function at 300s. Only start this task if it can
+      // plausibly finish inside the remaining window — otherwise save and
+      // hand off to a fresh invocation, which re-enters this loop and skips
+      // completed tasks. Never start a task that would die mid-call.
+      const taskEstimate = ROLE_TIME_ESTIMATE_MS[task.role] ?? DEFAULT_TASK_ESTIMATE_MS;
+      if (Date.now() - pipelineStart + taskEstimate > PIPELINE_HARD_STOP_MS) {
+        if (chainDepth >= MAX_CHAIN_DEPTH) {
+          orchestrator.log('devops', 'error',
+            `Relay chain depth ${chainDepth} reached — stopping handoffs. Watchdog will mark the build failed if it stalls.`);
+          return;
+        }
+        orchestrator.log('devops', 'info',
+          `Saving and handing off to a fresh build window before "${task.title}" — this keeps the build alive past the 5-minute limit`);
+        if (userId && hasSupabase()) {
+          await saveProject(userId, projectId, orchestrator.getState(), project.files, orchestrator.getProgress())
+            .catch(() => undefined);
+        }
+        await chainToFreshWindow(projectId, chainDepth);
+        return;
+      }
 
       // Start the task
       orchestrator.startTask(task.id, `agent-${task.role}`);
@@ -415,11 +489,22 @@ export function createProject(idea: string, userId?: string): string {
     });
   }
 
-  // Start the pipeline asynchronously. The returned promise is stashed on
-  // the store entry so the API route can hand it to Vercel's waitUntil —
-  // without that, the serverless function could be frozen mid-build and the
-  // project sat in 'building' forever.
-  const run = executePipeline(projectId, idea, userId).catch((err) => {
+  launchPipelineRun(projectId, idea, userId);
+
+  return projectId;
+}
+
+/**
+ * Start (or continue) the pipeline asynchronously and stash the promise on
+ * the store entry so API routes can hand it to Vercel's waitUntil — without
+ * that, the serverless function could be frozen mid-build and the project
+ * sat in 'building' forever.
+ *
+ * Used by createProject for fresh builds and by the /resume route for relay
+ * handoffs, so both get identical crash handling.
+ */
+export function launchPipelineRun(projectId: string, idea: string, userId: string | undefined, chainDepth = 0): Promise<void> {
+  const run = executePipeline(projectId, idea, userId, chainDepth).catch((err) => {
     console.error(`Pipeline failed for ${projectId}:`, err);
     // Persist the crash — otherwise a hard failure leaves the project
     // stuck in 'building' with no explanation (the stuck-build bug).
@@ -428,9 +513,37 @@ export function createProject(idea: string, userId?: string): string {
       `Build crashed: ${err instanceof Error ? err.message : 'unknown error'}. Start a new build to retry.`
     ).catch(() => undefined);
   });
-  store.get(projectId)!.run = run;
+  getStore().get(projectId)!.run = run;
+  return run;
+}
 
-  return projectId;
+/**
+ * Rebuild a project's live store entry from Supabase so the pipeline can be
+ * resumed in a fresh serverless invocation (relay runner). Returns what the
+ * resume route needs to relaunch, or null when there is nothing safe to
+ * resume — project not found, or a run already live in this process (a
+ * duplicate chain link; the route should acknowledge and no-op).
+ */
+export async function rehydrateProjectForResume(projectId: string): Promise<{ idea: string; userId?: string } | null> {
+  const store = getStore();
+  if (store.get(projectId)?.run) return null;
+
+  const persisted = await loadProjectFromSupabase(projectId).catch(() => null);
+  if (!persisted) return null;
+  const { state, files, userId } = persisted;
+
+  // Only builds that were interrupted mid-run should be resumed.
+  if (state.status !== 'building' && state.status !== 'planning') return null;
+
+  const orchestrator = new AppForgeOrchestrator(projectId, state.idea);
+  orchestrator.adoptState(state);
+  store.set(projectId, {
+    orchestrator,
+    state: orchestrator.getState(),
+    files: files || [],
+    userId,
+  });
+  return { idea: state.idea, userId };
 }
 
 /**
