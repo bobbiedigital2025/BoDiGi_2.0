@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { DocsProtect } from '@/components/docs-protect';
 import { DocsShelf } from '@/components/docs-shelf';
 import VercelDeployPanel from '@/components/vercel-deploy';
+import DeployRescue from '@/components/deploy-rescue';
 import GitHubExportPanel from '@/components/github-export';
 import DomainAssistant from '@/components/domain-assistant';
 import Day2Panel from '@/components/day2-panel';
@@ -349,6 +350,11 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
           />
           <DomainAssistant />
+          <DeployRescue
+            projectId={projectId}
+            tier={projectTier}
+            isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
+          />
         </section>
 
         {/* Modification Pass — chat-to-edit, with one-click Reality Check fixes (Pro perk) */}
