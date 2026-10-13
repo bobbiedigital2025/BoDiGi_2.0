@@ -16,6 +16,7 @@
 import type { GeneratedFile } from './types';
 import { ensureImportIntegrity } from './import-integrity';
 import { ensureStylingScaffold } from './styling-scaffold';
+import { runPreflight, preflightLogLines } from '../deploy/preflight';
 
 export function ensureExportScaffold(projectName: string, files: GeneratedFile[], seed?: string): GeneratedFile[] {
   const has = (path: string) => files.some((f) => f.path === path);
@@ -116,6 +117,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   }
 
   ensureStylingScaffold(seed || projectName, all);
+
+  // Preflight: bridge cross-tree modules to where the compiler looks and
+  // declare every imported package in package.json — BEFORE the stub pass,
+  // so a file that exists in the other tree gets bridged, not stubbed
+  // (SquishDough: zod/lucide-react undeclared; ui components across trees).
+  const preflight = runPreflight(all);
+  for (const line of preflightLogLines(preflight)) console.warn(`Export ${line}`);
 
   // Import integrity: any module imported but never written gets a typed stub,
   // so every export compiles no matter what the agents missed.

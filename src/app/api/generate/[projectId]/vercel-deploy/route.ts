@@ -13,7 +13,9 @@ import { createServerClient } from '@/lib/supabase/server-client';
 import { decrypt } from '@/lib/encryption';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { getProject } from '@/lib/agents/pipeline';
-import { loadProjectFromSupabase } from '@/lib/supabase/project-store';
+import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
+import { createAdminClient } from '@/lib/supabase/server';
+import { ensureExportScaffold } from '@/lib/agents/export-scaffold';
 import { computeSandboxEnv } from '@/lib/sandbox-keys';
 import type { GeneratedFile } from '@/lib/agents/types';
 
@@ -98,6 +100,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let projectName: string;
   let files: GeneratedFile[];
   let requiredProviders: string[] = [];
+  let sbState: Parameters<typeof saveProject>[2] | null = null;
+  let sbProgress: number | null = null;
 
   if (inMemory) {
     projectName = inMemory.state.name;
@@ -120,10 +124,48 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     projectName = sbProject.state.name;
     files = sbProject.files || [];
     requiredProviders = (sbProject.state?.specs?.requiredApis || []).map((a: { provider: string }) => a.provider);
+    sbState = sbProject.state;
+    sbProgress = sbProject.progress ?? null;
   }
 
   if (files.length === 0) {
     return NextResponse.json({ error: 'No files to deploy yet — wait for the build to finish.' }, { status: 400 });
+  }
+
+  // 2b. Preflight: this route previously deployed files RAW — no scaffold
+  // guarantee, no import/dependency reconciliation (SquishDough failed its
+  // Vercel build 3x on exactly this). Run the same scaffold + preflight the
+  // export path gets, persist the fixes, and narrate them into project_logs
+  // so the customer watches the fix happen.
+  try {
+    const pathsBefore = new Set(files.map((f) => f.path));
+    const pkgBefore = files.find((f) => f.path === 'package.json')?.content || '';
+    files = ensureExportScaffold(projectName, files, projectName);
+    const addedPaths = files.filter((f) => !pathsBefore.has(f.path)).map((f) => f.path);
+    let addedPkgs: string[] = [];
+    try {
+      const before = Object.keys(JSON.parse(pkgBefore || '{}').dependencies || {});
+      const after = JSON.parse(files.find((f) => f.path === 'package.json')?.content || '{}').dependencies || {};
+      addedPkgs = Object.keys(after).filter((k) => !before.includes(k));
+    } catch { /* report is best-effort */ }
+
+    if (addedPaths.length > 0 || addedPkgs.length > 0) {
+      const lines: string[] = [];
+      if (addedPkgs.length > 0) lines.push(`Deploy preflight: added ${addedPkgs.length} missing package(s) to package.json (${addedPkgs.join(', ')}) — without this the deploy would fail on missing modules.`);
+      if (addedPaths.length > 0) lines.push(`Deploy preflight: prepared ${addedPaths.length} file(s) the build needs (${addedPaths.slice(0, 4).join(', ')}${addedPaths.length > 4 ? ', …' : ''}).`);
+      const admin = createAdminClient();
+      for (const message of lines) {
+        await admin.from('project_logs').insert({ project_id: projectId, agent: 'devops', level: 'info', timestamp: Date.now(), message });
+      }
+      // Persist the repaired file set so the next export/deploy starts fixed
+      if (sbState) {
+        await saveProject(user.id, projectId, sbState, files, sbProgress ?? 0).catch(() => null);
+      } else if (inMemory) {
+        inMemory.files = files;
+      }
+    }
+  } catch (err) {
+    console.error('Deploy preflight failed (continuing with raw files):', err);
   }
 
   // 3. Get the user's Vercel token
@@ -233,14 +275,41 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   if (state !== 'READY') {
+    // Layer 2: a failed deploy must reach the project log and the fixer —
+    // not just the browser. Pull the build-log tail from Vercel's events API
+    // so "Fix it for me" hands Mend the real error text, not a paraphrase.
+    let logTail = '';
+    if (state === 'ERROR') {
+      try {
+        const ev = await fetch(`${VERCEL_API}/v2/deployments/${deploymentId}/events${teamQuery}`, { headers });
+        if (ev.ok) {
+          const events = await ev.json();
+          const texts = (Array.isArray(events) ? events : [])
+            .map((e: { payload?: { text?: string } }) => e?.payload?.text || '')
+            .filter((t: string) => /error|failed|cannot|not found/i.test(t));
+          logTail = texts.slice(-6).join('\n').slice(-1200);
+        }
+      } catch { /* diagnostics never block the response */ }
+      try {
+        const admin = createAdminClient();
+        await admin.from('project_logs').insert({
+          project_id: projectId,
+          agent: 'devops',
+          level: 'error',
+          timestamp: Date.now(),
+          message: `Deploy failed on Vercel.${logTail ? ` Build log tail: ${logTail.slice(0, 400)}` : ' Open "Fix it for me" to repair automatically.'}`,
+        });
+      } catch { /* non-fatal */ }
+    }
     return NextResponse.json(
       {
         success: false,
         state,
         deploymentUrl: finalUrl,
         error: state === 'ERROR'
-          ? 'Vercel reported a build error. Check the deployment logs in your Vercel dashboard.'
+          ? 'Vercel hit a build error — we captured the details. Use "Fix it for me" and we\'ll repair it automatically.'
           : 'Deployment is still building — check your Vercel dashboard in a minute.',
+        detail: logTail || undefined,
       },
       { status: state === 'ERROR' ? 400 : 202 }
     );

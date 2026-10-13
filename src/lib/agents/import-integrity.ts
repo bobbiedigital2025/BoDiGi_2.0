@@ -42,8 +42,8 @@ function candidates(resolvedNoExt: string): string[] {
   ];
 }
 
-function resolveSpec(spec: string, fromPath: string): string | null {
-  if (spec.startsWith('@/')) return `src/${spec.slice(2)}`;
+function resolveSpec(spec: string, fromPath: string, aliasRoot: string): string | null {
+  if (spec.startsWith('@/')) return `${aliasRoot}${spec.slice(2)}`;
   if (spec.startsWith('.')) {
     const dir = fromPath.split('/').slice(0, -1);
     for (const part of spec.split('/')) {
@@ -102,11 +102,22 @@ export function ensureImportIntegrity(
 ): ImportIntegrityFile[] {
   const paths = () => new Set(files.map(f => f.path));
 
+  // '@/' must resolve the way the project's own tsconfig maps it — the
+  // scaffold ships '@/*' → './*' (root), and stubs must land where the
+  // compiler actually looks (SquishDough: root tree imported @/components/ui/*
+  // which only existed under src/, and the src-assuming stubber saw no gap).
+  let aliasRoot = '';
+  try {
+    const tsconfig = files.find((f) => f.path === 'tsconfig.json');
+    const mapping = tsconfig ? JSON.parse(tsconfig.content)?.compilerOptions?.paths?.['@/*']?.[0] : undefined;
+    if (typeof mapping === 'string' && mapping.replace(/\\/g, '/').includes('src')) aliasRoot = 'src/';
+  } catch { /* keep default */ }
+
   // Missing stub files to create: target path -> { named:Set, default:boolean }
   const missing = new Map<string, { named: Set<string>; typeOnly: Set<string>; needsDefault: boolean; needsNamespace: boolean; css: boolean }>();
 
   const consider = (spec: string, clause: string | null, fromPath: string) => {
-    const base = resolveSpec(spec, fromPath);
+    const base = resolveSpec(spec, fromPath, aliasRoot);
     if (!base) return;
     const set = paths();
     if (candidates(base).some(c => set.has(c))) return;

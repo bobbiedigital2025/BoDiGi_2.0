@@ -15,7 +15,9 @@ type DeployState =
   | { status: 'idle' }
   | { status: 'deploying' }
   | { status: 'done'; url: string; sandboxProviders?: string[] }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; detail?: string }
+  | { status: 'fixing' }
+  | { status: 'fixed'; message: string };
 
 export default function VercelDeployPanel({
   projectId,
@@ -58,10 +60,30 @@ export default function VercelDeployPanel({
         setConnected(false);
         setDeploy({ status: 'error', message: 'Vercel connection missing — reconnect below.' });
       } else {
-        setDeploy({ status: 'error', message: data.error || 'Deploy failed.' });
+        setDeploy({ status: 'error', message: data.error || 'Deploy failed.', detail: data.detail });
       }
     } catch {
       setDeploy({ status: 'error', message: 'Network error — try again.' });
+    }
+  }
+
+  async function fixItForMe(detail?: string) {
+    setDeploy({ status: 'fixing' });
+    const instruction = `The Vercel deployment of this app failed during the build.${detail ? ` Here is the build log tail from Vercel:\n\n${detail}\n\n` : ' '}Find and fix the cause so the project builds (usually a missing dependency, missing file, or import error).`;
+    try {
+      const res = await fetch(`/api/generate/${projectId}/modify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction: instruction.slice(0, 1900) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setDeploy({ status: 'fixed', message: 'Fix applied — press Deploy my app to try again.' });
+      } else {
+        setDeploy({ status: 'error', message: data.error || 'The auto-fix did not go through — try again.', detail });
+      }
+    } catch {
+      setDeploy({ status: 'error', message: 'Network error while fixing — try again.', detail });
     }
   }
 
@@ -151,7 +173,23 @@ export default function VercelDeployPanel({
             {deploy.status === 'deploying' ? 'Deploying… (this takes ~1 min)' : 'Deploy my app'}
           </button>
           {deploy.status === 'error' && (
-            <div style={{ color: '#f87171', fontSize: '0.8125rem', marginTop: '0.5rem' }}>{deploy.message}</div>
+            <div style={{ marginTop: '0.5rem' }}>
+              <div style={{ color: '#f87171', fontSize: '0.8125rem' }}>{deploy.message}</div>
+              <button
+                onClick={() => fixItForMe(deploy.status === 'error' ? deploy.detail : undefined)}
+                style={{ ...btn, marginTop: '0.625rem', background: '#7c3aed', color: '#fff' }}
+              >
+                Fix it for me
+              </button>
+            </div>
+          )}
+          {deploy.status === 'fixing' && (
+            <div style={{ color: '#a78bfa', fontSize: '0.8125rem', marginTop: '0.5rem' }}>
+              Reading the error and repairing the code — usually under a minute…
+            </div>
+          )}
+          {deploy.status === 'fixed' && (
+            <div style={{ color: '#4ade80', fontSize: '0.8125rem', marginTop: '0.5rem' }}>{deploy.message}</div>
           )}
           <div style={{ color: '#555', fontSize: '0.75rem', marginTop: '0.75rem' }}>
             Deploys to <em>your</em> Vercel account — you own it, you control it, revoke BoDiGi anytime.
