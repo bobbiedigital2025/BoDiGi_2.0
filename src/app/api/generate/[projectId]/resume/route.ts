@@ -20,8 +20,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
-import { rehydrateProjectForResume, launchPipelineRun } from '@/lib/agents/pipeline';
+import { rehydrateProjectForResume, launchPipelineRun, getPipelineRun } from '@/lib/agents/pipeline';
 import { sweepStaleBuilds } from '@/lib/agents/stale-builds';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export const maxDuration = 300;
 
@@ -45,10 +46,31 @@ export async function POST(
   const depthParam = new URL(request.url).searchParams.get('depth');
   const depth = depthParam ? Math.max(0, parseInt(depthParam, 10) || 0) : 0;
 
-  const rehydrated = await rehydrateProjectForResume(projectId);
+  // A no-op must name its cause. Record whether THIS process holds a live
+  // run stash, then retry rehydrate once after a beat — a stash that is
+  // mid-teardown (parent dying on this same instance) clears within ~2s.
+  const stashPresent = () => getPipelineRun(projectId) !== null;
+  let rehydrated = await rehydrateProjectForResume(projectId);
+  if (!rehydrated && stashPresent()) {
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    rehydrated = await rehydrateProjectForResume(projectId);
+  }
   if (!rehydrated) {
     // Not an error: duplicate chain link or project gone — the parent that
     // fired this must not retry alarm. The watchdog owns true stalls.
+    const reason = stashPresent() ? 'run-stash-present-in-this-process' : 'no-stash-persisted-state-not-resumable';
+    try {
+      const supabase = createAdminClient();
+      await supabase.from('project_logs').insert({
+        project_id: projectId,
+        agent: 'devops',
+        level: 'error',
+        timestamp: Date.now(),
+        message: `Resume route no-oped (depth ${depth}): ${reason}`,
+      });
+    } catch {
+      // Diagnostics must never break the handoff contract.
+    }
     return NextResponse.json({ ok: true, note: 'not resumable or already running' });
   }
 
