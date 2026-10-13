@@ -115,7 +115,7 @@ export default function ModifyPanel({
       <div style={box}>
         <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.9375rem' }}>✏️ Modify your app with AI</div>
         <div style={{ color: '#888', fontSize: '0.8125rem', marginTop: '0.25rem', marginBottom: '0.75rem' }}>
-          Pro lets you change anything with a sentence — "make the header dark blue", "add a pricing section", "fix the weak onboarding my Reality Check flagged." The agent edits your app and the preview updates.
+          Pro lets you change anything with a sentence — &quot;make the header dark blue&quot;, &quot;add a pricing section&quot;, &quot;fix the weak onboarding my Reality Check flagged.&quot; The agent edits your app and the preview updates.
         </div>
         <a href="/pricing" style={{ ...btn, display: 'inline-block', textDecoration: 'none' }}>
           Upgrade to Modify

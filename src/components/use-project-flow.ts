@@ -59,12 +59,15 @@ export function useProjectFlow(
   }, [projectId]);
 
   useEffect(() => {
-    refresh();
+    // Deferred a tick: refresh sets state, and synchronous setState inside
+    // an effect triggers cascading renders (react-hooks error).
+    const t = setTimeout(() => { refresh(); }, 0);
     const onSaved = () => refresh();
     const onFocus = () => refresh();
     window.addEventListener('bodigi-keys-saved', onSaved);
     window.addEventListener('focus', onFocus);
     return () => {
+      clearTimeout(t);
       window.removeEventListener('bodigi-keys-saved', onSaved);
       window.removeEventListener('focus', onFocus);
     };

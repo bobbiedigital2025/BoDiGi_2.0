@@ -37,12 +37,17 @@ export default function ProjectJourneyMenu({
   const ref = useRef<HTMLDivElement>(null);
 
   // Read the stored step from the last visit; write the current one.
+  // Deferred a tick: synchronous localStorage reads + setState inside an
+  // effect trigger cascading renders (react-hooks flags it as an error).
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LAST_VISIT_KEY(projectId));
-      if (raw) setLastVisitStep(parseInt(raw, 10));
-      localStorage.setItem(LAST_VISIT_KEY(projectId), String(flow.step));
-    } catch { /* private mode etc. */ }
+    const t = setTimeout(() => {
+      try {
+        const raw = localStorage.getItem(LAST_VISIT_KEY(projectId));
+        if (raw) setLastVisitStep(parseInt(raw, 10));
+        localStorage.setItem(LAST_VISIT_KEY(projectId), String(flow.step));
+      } catch { /* private mode etc. */ }
+    }, 0);
+    return () => clearTimeout(t);
     // Only on mount + when the step actually changes
   }, [projectId, flow.step]);
 

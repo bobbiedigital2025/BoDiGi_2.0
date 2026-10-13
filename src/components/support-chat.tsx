@@ -38,15 +38,19 @@ export function SupportChat() {
     return () => window.removeEventListener('bodigi:open-support', handler);
   }, []);
 
-  // Restore conversation on mount
+  // Restore conversation on mount (deferred a tick: synchronous setState
+  // inside an effect triggers cascading renders — react-hooks error).
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
-      }
-    } catch { /* fresh start */ }
+    const t = setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+        }
+      } catch { /* fresh start */ }
+    }, 0);
+    return () => clearTimeout(t);
   }, []);
 
   // Persist conversation

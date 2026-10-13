@@ -7,7 +7,7 @@
  * new snapshot — so undo is always reversible.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface SnapshotEntry {
   id: number;
@@ -26,22 +26,30 @@ export default function VersionHistory({ projectId, tier, isAdmin }: {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [now, setNow] = useState<number>(0);
 
   const eligible = isAdmin || tier === 'pro' || tier === 'enterprise';
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/generate/${projectId}/history`);
       const data = await res.json();
       setHistory(data.history || []);
+      // Anchor relative timestamps at load time — Date.now() can't be
+      // called during render (impure-function rule).
+      setNow(Date.now());
     } catch {
       setHistory([]);
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
-    if (open && history === null) load();
-  }, [open, history]);
+    if (!open || history !== null) return;
+    // Deferred a tick — calling state-updating functions directly in an
+    // effect body triggers cascading renders (react-hooks error).
+    const t = setTimeout(() => { load(); }, 0);
+    return () => clearTimeout(t);
+  }, [open, history, load]);
 
   const restore = async (logId: number) => {
     setBusyId(logId);
@@ -68,7 +76,7 @@ export default function VersionHistory({ projectId, tier, isAdmin }: {
   };
 
   const timeAgo = (ts: number) => {
-    const mins = Math.floor((Date.now() - ts) / 60000);
+    const mins = Math.floor((now - ts) / 60000);
     if (mins < 1) return 'just now';
     if (mins < 60) return `${mins}m ago`;
     const hrs = Math.floor(mins / 60);

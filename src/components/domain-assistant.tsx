@@ -64,7 +64,7 @@ export default function DomainAssistant() {
     fontWeight: 600,
     fontSize: '0.875rem',
     border: 'none',
-    cursor: 'busy' as any,
+    cursor: 'pointer',
   };
 
   return (
