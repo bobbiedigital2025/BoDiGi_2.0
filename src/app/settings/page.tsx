@@ -50,27 +50,27 @@ export default function SettingsPage() {
   const [tier, setTier] = useState('free');
   const [role, setRole] = useState('user');
   const [projects, setProjects] = useState<Project[]>([]);
-  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'account' | 'documents' | 'connections' | 'features' | 'accessibility'>('account');
+  const [tab, setTab] = useState<'account' | 'documents' | 'connections' | 'features' | 'accessibility'>(() => {
+    // Deep links: /settings#connections etc. Read once at mount.
+    if (typeof window !== 'undefined') {
+      const fromHash = window.location.hash.replace('#', '');
+      if (['account', 'documents', 'connections', 'features', 'accessibility'].includes(fromHash)) {
+        return fromHash as 'account' | 'documents' | 'connections' | 'features' | 'accessibility';
+      }
+    }
+    return 'account';
+  });
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
   }, [user, loading, router]);
 
   useEffect(() => {
-    const p = loadPrefs();
-    setPrefs(p);
-    applyPrefs(p);
-  }, []);
-
-  useEffect(() => {
-    // Deep links: /settings#connections etc. Keep in sync on tab change.
-    const fromHash = window.location.hash.replace('#', '');
-    if (['account', 'documents', 'connections', 'features', 'accessibility'].includes(fromHash)) {
-      setTab(fromHash as typeof tab);
-    }
+    applyPrefs(prefs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -157,7 +157,7 @@ export default function SettingsPage() {
   ];
   const switchTab = (id: typeof tab) => {
     setTab(id);
-    window.location.hash = id;
+    history.replaceState(null, '', '#' + id);
   };
 
   return (
