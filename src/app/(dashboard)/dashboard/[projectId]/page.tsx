@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { use } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -146,8 +148,19 @@ const PHASES = [
   { name: 'Documentation', agent: 'Docs Agent', desc: 'Writing documentation' },
 ];
 
+// Customer-facing status labels (pipeline jargon stays in the logs).
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  done: 'Built',
+  failed: 'Failed',
+  planning: 'Planning',
+  building: 'Building',
+  testing: 'Testing',
+  deploying: 'Deploying',
+};
+
 export default function DashboardPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = use(params);
+  const router = useRouter();
   const [data, setData] = useState<ProjectData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'pipeline' | 'preview'>('pipeline');
@@ -176,10 +189,10 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
     }
   };
 
-  // Detect if project has build issues (failed tasks). Missing deploymentUrl is NOT
-  // an issue — apps are hosted previews inside BoDiGi 2.0, not external deployments.
-  const hasDeploymentIssues = data?.state?.tasks?.some(t => t.status === 'failed');
-  const missingKeys = hasDeploymentIssues ? ['OPENROUTER_API_KEY', 'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] : [];
+  // Detect if the build hit issues (failed tasks) — the Setup Agent opens in
+  // troubleshooting mode for these. Missing deploymentUrl is NOT an issue —
+  // apps are hosted previews inside BoDiGi 2.0, not external deployments.
+  const buildHadFailures = data?.state?.tasks?.some(t => t.status === 'failed') ?? false;
 
   useEffect(() => {
     let active = true;
@@ -226,8 +239,8 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
             <XCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">Project not found</h2>
             <p className="text-white/50 mb-6">{error}</p>
-            <Button variant="outline" onClick={() => window.history.back()}>
-              Go back
+            <Button variant="outline" onClick={() => router.push('/dashboard')}>
+              Back to your projects
             </Button>
           </CardContent>
         </Card>
@@ -304,24 +317,26 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
             <p className="text-xs text-white/40">Project ID: {state.id}</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <ProjectJourneyMenu projectId={projectId} flow={{ ...flow, goToKeys }} />
           {data.ai && (
-            <Badge variant={data.ai.connected ? 'success' : 'warning'} className="text-xs">
-              {data.ai.connected ? <Zap className="w-3 h-3 mr-1" /> : <ZapOff className="w-3 h-3 mr-1" />}
-              {data.ai.connected ? `AI: ${data.ai.model}` : 'AI: Demo mode'}
-            </Badge>
+            <span className="hidden md:inline-flex">
+              <Badge variant={data.ai.connected ? 'success' : 'warning'} className="text-xs">
+                {data.ai.connected ? <Zap className="w-3 h-3 mr-1" /> : <ZapOff className="w-3 h-3 mr-1" />}
+                {data.ai.connected ? `AI: ${data.ai.model}` : 'AI: Demo mode'}
+              </Badge>
+            </span>
           )}
-          <a href={`/analytics/${projectId}`}>
+          <Link href={`/analytics/${projectId}`}>
             <Button variant="outline" size="sm">
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Analytics
+              <BarChart3 className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Analytics</span>
             </Button>
-          </a>
+          </Link>
           <Badge variant={state.status === 'done' ? 'success' : state.status === 'failed' ? 'error' : 'info'}>
-            {state.status}
+            {PROJECT_STATUS_LABELS[state.status] || state.status}
           </Badge>
-          <span className="text-sm text-white/60">{progress}% complete</span>
+          <span className="hidden sm:inline text-sm text-white/60">{progress}% complete</span>
         </div>
       </header>
 
@@ -405,7 +420,6 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
                   });
                   const isComplete = phaseTasks.length > 0 && phaseTasks.every((t) => t.status === 'completed');
                   const isInProgress = phaseTasks.some((t) => t.status === 'in_progress' || t.status === 'retrying');
-                  const isPending = phaseTasks.length > 0 && phaseTasks.every((t) => t.status === 'pending');
                   const hasFailed = phaseTasks.some((t) => t.status === 'failed');
 
                   return (
@@ -794,10 +808,10 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
         )}
       </div>
 
-      {/* Setup Agent floating button */}
+      {/* Setup Agent floating button — raised to clear the BuildFlowBar below */}
       <button
         onClick={() => setSetupAgentOpen(true)}
-        className="fixed bottom-4 left-4 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/30 flex items-center justify-center hover:scale-110 transition-transform"
+        className="fixed bottom-24 left-4 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/30 flex items-center justify-center hover:scale-110 transition-transform"
         title="Setup Agent — Get help with API keys, deployment, and customization"
       >
         <Bot className="w-6 h-6 text-white" />
@@ -807,7 +821,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
       <SetupAgent
         isOpen={setupAgentOpen}
         onClose={() => setSetupAgentOpen(false)}
-        missingKeys={missingKeys}
+        buildFailed={buildHadFailures}
         projectId={projectId}
       />
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { use } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -111,6 +112,16 @@ const ROLE_META: Record<string, { icon: React.ComponentType<{ className?: string
   healing: { icon: Wrench, label: 'Healing', color: 'text-red-400' },
 };
 
+// Customer-facing status labels (pipeline jargon stays in the logs).
+const STATUS_LABELS: Record<string, string> = {
+  done: 'Built',
+  failed: 'Failed',
+  planning: 'Planning',
+  building: 'Building',
+  testing: 'Testing',
+  deploying: 'Deploying',
+};
+
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
@@ -162,7 +173,7 @@ export default function AnalyticsPage({ params }: { params: Promise<{ projectId:
     );
   }
 
-  const { state, progress, agentActivity } = data;
+  const { state } = data;
   const tasks = state.tasks;
   const completed = tasks.filter(t => t.status === 'completed').length;
   const failed = tasks.filter(t => t.status === 'failed').length;
@@ -217,12 +228,12 @@ export default function AnalyticsPage({ params }: { params: Promise<{ projectId:
       {/* Header */}
       <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur-xl z-50">
         <div className="flex items-center gap-4">
-          <a href={`/dashboard/${projectId}`}>
+          <Link href={`/dashboard/${projectId}`}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Dashboard
             </Button>
-          </a>
+          </Link>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
               <BarChart3 className="w-4 h-4 text-white" />
@@ -245,7 +256,7 @@ export default function AnalyticsPage({ params }: { params: Promise<{ projectId:
             {(data.ai as { label?: string })?.label || 'AI'}: {data.ai?.connected ? data.ai.model : 'offline'}
           </Badge>
           <Badge variant={state.status === 'done' ? 'success' : state.status === 'failed' ? 'error' : 'info'}>
-            {state.status}
+            {STATUS_LABELS[state.status] || state.status}
           </Badge>
         </div>
       </header>
