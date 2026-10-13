@@ -79,7 +79,7 @@ function getStore() {
 // re-enters the loop (completed tasks are skipped). Chaining always happens
 // BETWEEN tasks, never mid-task: a mid-task death is the stuck-build bug.
 // 15s of the window is reserved for the save + handoff fetch.
-const PIPELINE_HARD_STOP_MS = 285_000;
+const PIPELINE_HARD_STOP_MS = 90_000; // TEMP relay-forcing test — restore to 285_000 after verification
 // Conservative per-role runtime estimates. Wrong estimates degrade
 // gracefully: an overestimate costs an extra chain hop (~1s), an
 // underestimate risks a mid-task death — so these lean generous.
