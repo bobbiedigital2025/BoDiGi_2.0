@@ -38,7 +38,8 @@ export function AppNav() {
   const [stardustOn, setStardustOn] = useState(true);
 
   useEffect(() => {
-    setStardustOn(stardustEnabled());
+    const t = setTimeout(() => setStardustOn(stardustEnabled()), 0);
+    return () => clearTimeout(t);
   }, [open]);
   const [appsOpen, setAppsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -151,7 +152,7 @@ export function AppNav() {
             <div className="absolute right-0 mt-2 w-80 rounded-xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/60 overflow-hidden z-50">
               <div className="px-4 py-3 border-b border-white/10">
                 <div className="text-sm font-semibold">Your apps</div>
-                <div className="text-[11px] text-white/40 mt-0.5">Everything you've built, in one place</div>
+                <div className="text-[11px] text-white/40 mt-0.5">Everything you&apos;ve built, in one place</div>
               </div>
 
               <div className="max-h-96 overflow-y-auto">

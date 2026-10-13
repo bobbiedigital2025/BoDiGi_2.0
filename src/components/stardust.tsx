@@ -46,10 +46,9 @@ export function stardustEnabled(): boolean {
 
 export default function StardustBackground({ className = '' }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(() => (typeof window === 'undefined' ? true : stardustEnabled()));
 
   useEffect(() => {
-    setEnabled(stardustEnabled());
     const onToggle = (e: Event) => setEnabled((e as CustomEvent).detail !== 'off');
     window.addEventListener('stardust-toggle', onToggle);
     return () => window.removeEventListener('stardust-toggle', onToggle);

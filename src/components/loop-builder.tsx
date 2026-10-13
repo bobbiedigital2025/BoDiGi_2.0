@@ -67,7 +67,10 @@ export default function LoopBuilder({ projectId, tier, isAdmin }: {
     }
   };
 
-  useEffect(() => { load(); }, [projectId]);
+  useEffect(() => {
+    const t = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(t);
+  }, [projectId]);
 
   const addLoop = async () => {
     if (busy || !actionLabel.trim() || !rewardLabel.trim()) return;
@@ -196,7 +199,7 @@ export default function LoopBuilder({ projectId, tier, isAdmin }: {
       <div style={{ marginTop: '0.75rem' }}>
         {!eligible ? (
           <p style={{ color: '#888', fontSize: '0.8125rem' }}>
-            Loops configured free — <a href="/pricing" style={{ color: '#67e8f9', textDecoration: 'underline' }}>upgrade to Pro</a> to wire them into your app's code.
+            Loops configured free — <a href="/pricing" style={{ color: '#67e8f9', textDecoration: 'underline' }}>upgrade to Pro</a> to wire them into your app&apos;s code.
           </p>
         ) : (
           <button onClick={wireLoops} disabled={wiring || !loops || loops.length === 0} style={{ padding: '0.625rem 1.25rem', borderRadius: '0.5rem', background: 'linear-gradient(135deg, #7c3aed, #c026d3)', color: '#fff', fontWeight: 600, fontSize: '0.875rem', border: 'none', cursor: 'pointer', opacity: wiring || !loops || loops.length === 0 ? 0.6 : 1 }}>

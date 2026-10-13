@@ -63,7 +63,10 @@ export function ApiKeysSection({ projects }: { projects: Project[] }) {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const t = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(t);
+  }, [load]);
 
   const addKey = async () => {
     if (!newName || !newValue) return;
@@ -143,7 +146,7 @@ export function ApiKeysSection({ projects }: { projects: Project[] }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
         <p style={{ margin: 0, color: '#888', fontSize: '0.8125rem' }}>
           Account-wide keys for your apps — encrypted at rest, never displayed in full.
-          Keys saved on a specific app's dashboard are per-app and won't appear here.
+          Keys saved on a specific app&apos;s dashboard are per-app and won&apos;t appear here.
         </p>
         <button
           onClick={() => setShowAdd(!showAdd)}
@@ -182,12 +185,12 @@ export function ApiKeysSection({ projects }: { projects: Project[] }) {
         <div style={{ padding: '1rem', background: '#0d0d0d', border: '1px solid #222', borderRadius: '0.625rem' }}>
           <div style={{ color: '#e5e5e5', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.375rem' }}>No keys stored yet</div>
           <div style={{ color: '#888', fontSize: '0.8125rem', marginBottom: '0.75rem' }}>
-            Your apps run on <strong style={{ color: '#c4b5fd' }}>your own keys</strong> — that's what keeps your plan cheap.
+            Your apps run on <strong style={{ color: '#c4b5fd' }}>your own keys</strong> — that&apos;s what keeps your plan cheap.
             Start with the two every app needs:
           </div>
           <div style={{ color: '#999', fontSize: '0.8125rem', marginBottom: '0.75rem', lineHeight: 1.6 }}>
             <div>⚡ <strong style={{ color: '#e5e5e5' }}>Telnyx</strong> — the AI that builds your app (<a href="https://portal.telnyx.com" target="_blank" rel="noreferrer" style={{ color: '#a78bfa' }}>get a key ↗</a>)</div>
-            <div>🗄️ <strong style={{ color: '#e5e5e5' }}>Supabase</strong> — your app's database (<a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" style={{ color: '#a78bfa' }}>get a key ↗</a>)</div>
+            <div>🗄️ <strong style={{ color: '#e5e5e5' }}>Supabase</strong> — your app&apos;s database (<a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" style={{ color: '#a78bfa' }}>get a key ↗</a>)</div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button onClick={() => setShowAdd(true)} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', background: 'linear-gradient(135deg,#7c3aed,#c026d3)', color: '#fff', fontWeight: 600, fontSize: '0.8125rem', border: 'none', cursor: 'pointer' }}>
