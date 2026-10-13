@@ -24,10 +24,21 @@ export default function LandingPage() {
   const { user, signOut } = useAuth();
   const [idea, setIdea] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [planMode, setPlanMode] = useState(false);
   const pendingBrief = useRef<string | null>(null);
+
+  // Restore an idea the visitor typed before being sent to log in — a
+  // customer should never lose their pitch to a sign-in redirect.
+  useEffect(() => {
+    const pending = sessionStorage.getItem('bodigi_pending_idea');
+    if (pending) {
+      setIdea(pending);
+      sessionStorage.removeItem('bodigi_pending_idea');
+    }
+  }, []);
 
   // Check if user has already accepted terms (stored in localStorage for UX)
   useEffect(() => {
@@ -41,6 +52,7 @@ export default function LandingPage() {
     const finalIdea = pendingBrief.current ?? idea;
     if (!finalIdea.trim()) { setLoading(false); return; }
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -55,9 +67,11 @@ export default function LandingPage() {
       if (data.projectId) {
         router.push(`/dashboard/${data.projectId}`);
       } else {
+        setError(data.error || 'The build team could not start right now. Please try again in a moment.');
         setLoading(false);
       }
     } catch {
+      setError('Something went wrong reaching the build team. Check your connection and try again.');
       setLoading(false);
     }
   };
@@ -67,6 +81,8 @@ export default function LandingPage() {
 
     // Redirect to login if not authenticated
     if (!user) {
+      // Keep the pitch safe through the sign-in detour
+      if (idea.trim()) sessionStorage.setItem('bodigi_pending_idea', idea);
       router.push('/login?redirect=/');
       return;
     }
@@ -189,6 +205,11 @@ export default function LandingPage() {
                   )}
                 </Button>
               </div>
+              {error && (
+                <p className="mt-3 text-sm text-red-400 text-left" role="alert">
+                  {error}
+                </p>
+              )}
               <div className="mt-3 text-center">
                 <button
                   onClick={() => setPlanMode(true)}

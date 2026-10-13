@@ -52,6 +52,7 @@ export default function SettingsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [portalBusy, setPortalBusy] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
   const [tab, setTab] = useState<'account' | 'documents' | 'connections' | 'features' | 'accessibility'>('account');
 
   useEffect(() => {
@@ -113,10 +114,14 @@ export default function SettingsPage() {
 
   async function openPortal() {
     setPortalBusy(true);
+    setPortalError(null);
     try {
       const res = await fetch('/api/stripe/portal', { method: 'POST' });
       const data = await res.json();
       if (data.url) window.location.href = data.url;
+      else setPortalError(data.error || 'Billing portal is unavailable right now. Email support@bobbie.digital and we will sort it out.');
+    } catch {
+      setPortalError('Could not reach billing. Check your connection and try again.');
     } finally {
       setPortalBusy(false);
     }
@@ -197,6 +202,11 @@ export default function SettingsPage() {
                 </button>
               )}
             </div>
+            {portalError && (
+              <p style={{ color: '#f87171', fontSize: '0.8125rem', marginTop: '0.625rem' }} role="alert">
+                {portalError}
+              </p>
+            )}
           </div>
 
           {/* ============ ACCOUNT ============ */}

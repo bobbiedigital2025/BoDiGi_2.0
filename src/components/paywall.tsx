@@ -78,7 +78,7 @@ export function Paywall({ feature, currentTier, previewExpiresAt, projectName }:
             Upgrade to Unlock <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
           <p className="text-xs text-white/30">
-            Starting at $19/month — cancel anytime
+            Starting at $19.99/month — cancel anytime
           </p>
         </div>
       </CardContent>

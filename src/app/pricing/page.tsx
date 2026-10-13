@@ -38,7 +38,7 @@ const plans: Plan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    price: 19,
+    price: 19.99,
     icon: <Zap className="w-6 h-6" />,
     color: 'from-blue-500 to-cyan-500',
     description: 'Own your code',
@@ -55,7 +55,7 @@ const plans: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    price: 49,
+    price: 49.99,
     icon: <Crown className="w-6 h-6" />,
     color: 'from-violet-500 to-fuchsia-500',
     description: 'For serious builders',
@@ -91,9 +91,9 @@ const plans: Plan[] = [
 ];
 
 export default function PricingPage() {
-  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [loading, setLoading] = useState<string | null>(null);
   const [promo, setPromo] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleUpgrade = async (tierId: string) => {
     if (tierId === 'free') return;
@@ -104,6 +104,7 @@ export default function PricingPage() {
     }
 
     setLoading(tierId);
+    setError(null);
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -121,11 +122,11 @@ export default function PricingPage() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || 'Failed to start checkout. Please try again.');
+        setError(data.error || 'Failed to start checkout. Please try again.');
         setLoading(null);
       }
     } catch {
-      alert('Something went wrong. Please try again.');
+      setError('Something went wrong. Please try again.');
       setLoading(null);
     }
   };
@@ -175,29 +176,16 @@ export default function PricingPage() {
             </a>
           </div>
 
-          {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-3 bg-white/5 rounded-full p-1">
-            <button
-              className={`px-4 py-2 rounded-full text-sm transition ${billingPeriod === 'monthly' ? 'bg-white/10 text-white' : 'text-white/40'}`}
-              onClick={() => setBillingPeriod('monthly')}
-            >
-              Monthly
-            </button>
-            <button
-              className={`px-4 py-2 rounded-full text-sm transition ${billingPeriod === 'yearly' ? 'bg-white/10 text-white' : 'text-white/40'}`}
-              onClick={() => setBillingPeriod('yearly')}
-            >
-              Yearly <Badge variant="success" className="ml-1">Save 20%</Badge>
-            </button>
-          </div>
+          {error && (
+            <p className="mb-8 text-sm text-red-400" role="alert">
+              {error}
+            </p>
+          )}
         </div>
 
         {/* Plans Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {plans.map((plan) => {
-            const yearlyPrice = Math.round(plan.price * 0.8);
-            const displayPrice = billingPeriod === 'yearly' ? yearlyPrice : plan.price;
-
             return (
               <Card
                 key={plan.id}
@@ -219,13 +207,8 @@ export default function PricingPage() {
                 </CardHeader>
                 <CardContent className="text-center">
                   <div className="mb-6">
-                    <span className="text-4xl font-bold">${displayPrice}</span>
+                    <span className="text-4xl font-bold">${plan.price}</span>
                     <span className="text-white/40 text-sm">/month</span>
-                    {billingPeriod === 'yearly' && plan.price > 0 && (
-                      <p className="text-xs text-green-400 mt-1">
-                        ${displayPrice * 12}/year (save ${(plan.price - yearlyPrice) * 12})
-                      </p>
-                    )}
                   </div>
 
                   <ul className="space-y-3 mb-8 text-left">
