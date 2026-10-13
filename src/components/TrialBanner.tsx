@@ -76,7 +76,7 @@ export default function TrialBanner() {
           href="/pricing"
           className="inline-block rounded-md bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
         >
-          Get Pro back — $49/mo
+          Get Pro back — $49.99/mo
         </Link>
       </div>
     );

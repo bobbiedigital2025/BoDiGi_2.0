@@ -23,7 +23,7 @@ const faqs = [
   },
   {
     q: 'What does BoDiGi cost?',
-    a: 'Free tier: build a real app with a 7-day live preview, no card required. Starter ($19/mo): export your code and keep previews 30 days. Pro ($49/mo): unlimited apps, one-click deploy to your own Vercel, AI chat-to-edit, and the full marketing kit. Enterprise ($199/mo): everything unlimited plus phone support.',
+    a: 'Free tier: build a real app with a 7-day live preview, no card required. Starter ($19.99/mo): export your code and keep previews 30 days. Pro ($49.99/mo): unlimited apps, one-click deploy to your own Vercel, AI chat-to-edit, and the full marketing kit. Enterprise ($199/mo): everything unlimited plus phone support.',
   },
   {
     q: 'Who owns the app BoDiGi builds?',

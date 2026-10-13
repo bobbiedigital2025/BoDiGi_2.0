@@ -356,7 +356,7 @@ export default function LandingPage() {
                   <h3 className="font-semibold">The BoDiGi way</h3>
                 </div>
                 <ul className="space-y-3 text-sm text-white/80">
-                  <li>Free to start — $19/mo when you&apos;re serious</li>
+                  <li>Free to start — $19.99/mo when you&apos;re serious</li>
                   <li>Working app the same day</li>
                   <li>Rebuild and iterate whenever you want</li>
                   <li>Test the idea with real users before you spend real money</li>
