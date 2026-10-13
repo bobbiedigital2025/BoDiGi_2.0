@@ -21,6 +21,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { rehydrateProjectForResume, launchPipelineRun } from '@/lib/agents/pipeline';
+import { sweepStaleBuilds } from '@/lib/agents/stale-builds';
 
 export const maxDuration = 300;
 
@@ -33,6 +34,12 @@ export async function POST(
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // The resume route is the headless heartbeat: chained builds pass through
+  // here even when nobody is watching a dashboard (whose GET polls are the
+  // other sweep trigger). Sweep so a build that stalls between links still
+  // gets marked failed honestly instead of hanging forever.
+  waitUntil(sweepStaleBuilds().catch(() => 0));
 
   const { projectId } = await params;
   const depthParam = new URL(request.url).searchParams.get('depth');
