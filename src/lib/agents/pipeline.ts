@@ -102,7 +102,7 @@ const MAX_CHAIN_DEPTH = 10;
  * acknowledges immediately (202) and keeps working via waitUntil, so this
  * await only lasts as long as the handoff itself.
  */
-async function chainToFreshWindow(projectId: string, chainDepth: number): Promise<void> {
+async function chainToFreshWindow(projectId: string, chainDepth: number): Promise<number> {
   const base =
     process.env.NEXT_PUBLIC_SITE_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
@@ -116,10 +116,12 @@ async function chainToFreshWindow(projectId: string, chainDepth: number): Promis
     if (!res.ok) {
       console.error(`Resume chain for ${projectId} got HTTP ${res.status} — watchdog will recover if the build stalls`);
     }
+    return res.status;
   } catch (err) {
     // The build's state is saved; the stale-build watchdog flips it to
     // failed (honest) rather than leaving it 'building' forever.
     console.error(`Resume chain for ${projectId} failed:`, err);
+    return -1;
   }
 }
 
@@ -173,7 +175,30 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
         // sees a stashed run. Clearing it here guarantees the child
         // rehydrates from the state we just saved and continues the relay.
         project.run = undefined;
-        await chainToFreshWindow(projectId, chainDepth);
+        const handoffStatus = await chainToFreshWindow(projectId, chainDepth);
+        // The handoff result decides whether this build lives. Log it into
+        // the project log (Supabase) — console output is invisible in
+        // production, and a stranded build must explain itself.
+        if (handoffStatus === 202) {
+          orchestrator.log('devops', 'info',
+            `Handoff acknowledged (HTTP 202) — a fresh build window has taken over.`);
+        } else if (handoffStatus === 200) {
+          orchestrator.log('devops', 'error',
+            `Handoff returned HTTP 200 (no-op): the fresh window saw this build as already running or not resumable. Watchdog will mark it failed if it stalls.`);
+        } else if (handoffStatus === 401) {
+          orchestrator.log('devops', 'error',
+            `Handoff rejected (HTTP 401): CRON_SECRET is missing or mismatched in the production environment. Set it in Vercel (Production scope) and rebuild.`);
+        } else if (handoffStatus === -1) {
+          orchestrator.log('devops', 'error',
+            `Handoff request failed (network error reaching the resume endpoint). Watchdog will mark this build failed if it stalls.`);
+        } else {
+          orchestrator.log('devops', 'error',
+            `Handoff returned HTTP ${handoffStatus}. Watchdog will mark this build failed if it stalls.`);
+        }
+        if (userId && hasSupabase()) {
+          await saveProject(userId, projectId, orchestrator.getState(), project.files, orchestrator.getProgress())
+            .catch(() => undefined);
+        }
         return;
       }
 
