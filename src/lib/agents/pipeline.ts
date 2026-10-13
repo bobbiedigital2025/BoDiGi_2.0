@@ -564,14 +564,36 @@ export function launchPipelineRun(projectId: string, idea: string, userId: strin
  */
 export async function rehydrateProjectForResume(projectId: string): Promise<{ idea: string; userId?: string } | null> {
   const store = getStore();
-  if (store.get(projectId)?.run) return null;
+  if (store.get(projectId)?.run) {
+    console.warn(`[resume] ${projectId}: live run stash present in this process — duplicate chain link, no-op`);
+    return null;
+  }
 
-  const persisted = await loadProjectFromSupabase(projectId).catch(() => null);
-  if (!persisted) return null;
+  // Load persisted state, with one retry. The child usually cold-starts on a
+  // fresh instance, and a transient pooler/network flake here was previously
+  // swallowed by `.catch(() => null)` — stranding the relay as a 200 no-op
+  // with zero evidence (verification build 4). Every null path logs its cause.
+  let persisted: Awaited<ReturnType<typeof loadProjectFromSupabase>> = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      persisted = await loadProjectFromSupabase(projectId);
+      break;
+    } catch (err) {
+      console.error(`[resume] ${projectId}: state load threw (attempt ${attempt}/2):`, err);
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+  if (!persisted) {
+    console.warn(`[resume] ${projectId}: no persisted state found — nothing to resume`);
+    return null;
+  }
   const { state, files, userId } = persisted;
 
   // Only builds that were interrupted mid-run should be resumed.
-  if (state.status !== 'building' && state.status !== 'planning') return null;
+  if (state.status !== 'building' && state.status !== 'planning') {
+    console.warn(`[resume] ${projectId}: status '${state.status}' is not resumable — no-op`);
+    return null;
+  }
 
   const orchestrator = new AppForgeOrchestrator(projectId, state.idea);
   orchestrator.adoptState(state);
