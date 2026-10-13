@@ -2,8 +2,8 @@
 
 /**
  * GitHubExportPanel — pushes the project's code to a new repo under the
- * user's own GitHub account. Uses the (previously UI-less) github-export
- * API: repo creation + file push via the contents API, with the user's
+ * user's own GitHub account. The github-export API creates the repo and
+ * pushes every file in one atomic Git Trees commit, with the user's
  * stored token from Setup.
  */
 

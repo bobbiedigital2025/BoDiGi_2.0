@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Bot, Send, Key, CheckCircle, AlertTriangle, ExternalLink, X, Lock, Shield, Sparkles } from 'lucide-react';
+import { Bot, Send, ExternalLink, X, Lock } from 'lucide-react';
 
 interface Message {
   role: 'agent' | 'user';
@@ -19,36 +19,29 @@ interface Message {
 interface SetupAgentProps {
   isOpen: boolean;
   onClose: () => void;
-  missingKeys?: string[];
+  buildFailed?: boolean;
   projectId?: string;
 }
 
-export function SetupAgent({ isOpen, onClose, missingKeys = [], projectId }: SetupAgentProps) {
+export function SetupAgent({ isOpen, onClose, buildFailed = false, projectId }: SetupAgentProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [configuredKeys, setConfiguredKeys] = useState<Set<string>>(new Set());
-  const [showSecurityTip, setShowSecurityTip] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize with a welcome message
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      const initialContent = missingKeys.length > 0
-        ? `Hey! I noticed your deployment hit a snag — looks like you're missing ${missingKeys.length} API key${missingKeys.length > 1 ? 's' : ''}. Don't worry, this happens to everyone on their first build.\n\nHere's the good news: your app runs on **your own API keys**, which means you're in control of your costs and your data. I'll walk you through getting each key — it takes about 5 minutes.\n\nReady to start?`
-        : `Hey! I'm your Setup Agent. I can help you:\n\n• Configure API keys for your app\n• Understand what each key does\n• Learn how to keep your keys safe\n• Troubleshoot deployment issues\n\nWhat do you need help with?`;
-
-      setMessages([{
-        role: 'agent',
-        content: initialContent,
-        timestamp: new Date(),
-      }]);
-
-      if (missingKeys.length > 0) {
-        setShowSecurityTip(true);
-      }
-    }
-  }, [isOpen, missingKeys, messages.length]);
+    if (!isOpen || messages.length !== 0) return;
+    const initialContent = buildFailed
+      ? `Hey! I can see your build hit an error — frustrating, but usually fixable. The most common wins:\n\n• Simplify or rephrase your idea slightly and rebuild\n• Ask me what the error in your pipeline log means\n\nI can also help with API keys, deploying, and domains. What would you like to do?`
+      : `Hey! I'm your Setup Agent. I can help you:\n\n• Configure API keys for your app\n• Understand what each key does\n• Learn how to keep your keys safe\n• Troubleshoot deployment issues\n\nWhat do you need help with?`;
+    // Deferred a tick: synchronous setState inside an effect triggers
+    // cascading renders (react-hooks flags it as an error).
+    const t = setTimeout(() => {
+      setMessages([{ role: 'agent', content: initialContent, timestamp: new Date() }]);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [isOpen, buildFailed, messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -96,19 +89,6 @@ export function SetupAgent({ isOpen, onClose, missingKeys = [], projectId }: Set
           content: data.message,
           timestamp: new Date(),
         }]);
-
-        // Check if the user pasted something that looks like a key
-        const userText = userMessage.content.trim();
-        if (userText.length > 20 && /^[A-Za-z0-9_\-\.]+$/.test(userText)) {
-          // Looks like a key — mark as configured
-          const matchedKey = missingKeys.find(k =>
-            userText.toLowerCase().includes(k.toLowerCase().replace('_', '')) ||
-            k.toLowerCase().includes('telnyx') && userText.length > 30
-          );
-          if (matchedKey) {
-            setConfiguredKeys(prev => new Set([...prev, matchedKey]));
-          }
-        }
       }
     } catch {
       setMessages(prev => [...prev, {
@@ -148,9 +128,7 @@ export function SetupAgent({ isOpen, onClose, missingKeys = [], projectId }: Set
             <div>
               <CardTitle className="text-sm">Setup Agent</CardTitle>
               <p className="text-xs text-white/40">
-                {missingKeys.length > 0
-                  ? `${configuredKeys.size}/${missingKeys.length} keys configured`
-                  : 'AI-powered setup assistant'}
+                AI-powered setup assistant
               </p>
             </div>
           </div>
@@ -158,16 +136,6 @@ export function SetupAgent({ isOpen, onClose, missingKeys = [], projectId }: Set
             <X className="w-4 h-4" />
           </Button>
         </CardHeader>
-
-        {/* Security Tip Banner */}
-        {showSecurityTip && (
-          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-start gap-2">
-            <Shield className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-            <p className="text-xs text-amber-200/80">
-              Your API keys are like passwords. Never share them publicly, never commit them to git, and never paste them in public chats.
-            </p>
-          </div>
-        )}
 
         {/* Messages */}
         <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[200px]">

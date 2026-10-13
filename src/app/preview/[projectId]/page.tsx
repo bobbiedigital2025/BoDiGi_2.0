@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { resolveTier } from '@/lib/trial';
 import { getProjectAnywhere } from '@/lib/agents/pipeline';
 import { PreviewTabs } from '@/components/preview-tabs';
@@ -29,78 +30,10 @@ function extractWeaknesses(markdown: string | undefined): string[] {
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Minimal markdown → React renderer for the generated README.
- * Handles headings, bold/italic, inline code, code blocks, lists, links, tables (basic).
- * Keeps the preview self-contained without a markdown dependency.
- */
-function renderMarkdown(md: string) {
-  const blocks = md.split(/```/);
-  const out: React.ReactNode[] = [];
-  let key = 0;
-
-  blocks.forEach((block, blockIdx) => {
-    if (blockIdx % 2 === 1) {
-      // Code block — first line is the language hint
-      const lines = block.split('\n');
-      const lang = lines[0].trim();
-      const code = lines.slice(1).join('\n').replace(/^\n+|\n+$/g, '');
-      out.push(
-        <pre key={key++} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '0.5rem', padding: '1rem', overflowX: 'auto', fontSize: '0.8125rem', fontFamily: 'monospace', color: '#a5f3fc', margin: '1rem 0' }}>
-          {lang && <div style={{ color: '#555', fontSize: '0.6875rem', marginBottom: '0.5rem', textTransform: 'uppercase' }}>{lang}</div>}
-          <code>{code}</code>
-        </pre>
-      );
-      return;
-    }
-
-    const lines = block.split('\n');
-    let list: string[] = [];
-
-    const flushList = () => {
-      if (list.length === 0) return;
-      out.push(
-        <ul key={key++} style={{ margin: '0.75rem 0', paddingLeft: '1.5rem', color: '#bbb' }}>
-          {list.map((item, i) => <li key={i} style={{ margin: '0.375rem 0', fontSize: '0.9375rem', lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: inline(item) }} />)}
-        </ul>
-      );
-      list = [];
-    };
-
-    const inline = (text: string): string =>
-      text
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:#fff">$1</strong>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.08);padding:0.125rem 0.375rem;border-radius:0.25rem;font-size:0.8125rem;color:#a5f3fc">$1</code>')
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:#67e8f9;text-decoration:underline">$1</a>');
-
-    lines.forEach((line) => {
-      const t = line.trim();
-      if (/^#{1,6}\s/.test(t)) {
-        flushList();
-        const level = t.match(/^#+/)![0].length;
-        const text = t.replace(/^#+\s*/, '');
-        const sizes = ['1.75rem', '1.375rem', '1.125rem', '1rem', '0.9375rem', '0.875rem'];
-        out.push(
-          <div key={key++} style={{ fontSize: sizes[level - 1], fontWeight: 700, color: '#fff', margin: level <= 2 ? '1.75rem 0 0.75rem' : '1.25rem 0 0.5rem', borderBottom: level <= 2 ? '1px solid rgba(255,255,255,0.08)' : 'none', paddingBottom: level <= 2 ? '0.5rem' : 0 }} dangerouslySetInnerHTML={{ __html: inline(text) }} />
-        );
-      } else if (/^[-*]\s/.test(t) || /^\d+\.\s/.test(t)) {
-        list.push(t.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, ''));
-      } else if (t === '---') {
-        flushList();
-        out.push(<hr key={key++} style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.08)', margin: '1.5rem 0' }} />);
-      } else if (t.length > 0) {
-        flushList();
-        out.push(
-          <p key={key++} style={{ margin: '0.75rem 0', color: '#bbb', fontSize: '0.9375rem', lineHeight: 1.7 }} dangerouslySetInnerHTML={{ __html: inline(t) }} />
-        );
-      }
-    });
-    flushList();
-  });
-
-  return <>{out}</>;
+export async function generateMetadata({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
+  const data = await getProjectAnywhere(projectId);
+  return { title: data ? `${data.state.name} — Live Preview` : 'Preview not available' };
 }
 
 export default async function PreviewPage({ params }: { params: Promise<{ projectId: string }> }) {
@@ -174,6 +107,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
 
   const specs = state.specs;
   const arch = state.architecture;
+  const sandboxProviders = (state as { sandboxProviders?: string[] }).sandboxProviders ?? [];
   const frontendFiles = files.filter(f => f.agent === 'frontend');
   const dbFiles = files.filter(f => f.agent === 'database');
   const beFiles = files.filter(f => f.agent === 'backend');
@@ -188,23 +122,13 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
   const passedChecks = checks.filter(c => c.status === 'passed').length;
   const failedChecks = checks.filter(c => c.status === 'failed').length;
 
-  const readmeFile = docsFiles.find(f => f.path.endsWith('README.md'));
-  const pitchFile = docsFiles.find(f => f.path.endsWith('INVESTOR_PITCH.md'));
   const realityFile = docsFiles.find(f => f.path.endsWith('REALITY_CHECK.md'));
-  const launchFile = docsFiles.find(f => f.path.endsWith('LAUNCH_GUIDE.md'));
-  const marketingFile = docsFiles.find(f => f.path.endsWith('MARKETING_KIT.md'));
-  // Legacy: single docs file that isn't one of the known names
-  const legacyDocs = docsFiles.filter(f => f !== readmeFile && f !== pitchFile && f !== realityFile && f !== launchFile && f !== marketingFile);
 
   const statusColor = state.status === 'done' ? '#10b981' : state.status === 'failed' ? '#ef4444' : '#a855f7';
   const statusLabel = state.status === 'done' ? 'Build Complete' : state.status === 'failed' ? 'Build Failed' : 'Building...';
 
   return (
-    <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>{state.name} — Live Preview</title>
+    <>
         <style>{`
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e5e5e5; }
@@ -257,8 +181,6 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
           .meta-row { display: flex; gap: 1rem; font-size: 0.75rem; color: #666; margin-top: 0.5rem; }
           .meta-row span { display: flex; align-items: center; gap: 0.25rem; }
         `}</style>
-      </head>
-      <body>
         {/* Header */}
         <header className="preview-header">
           <div className="preview-brand">
@@ -268,9 +190,9 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             {state.name}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <a href="/dashboard" style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', padding: '0.375rem 0.75rem', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.5rem' }}>
+            <Link href="/dashboard" style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', padding: '0.375rem 0.75rem', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.5rem' }}>
               ← Dashboard
-            </a>
+            </Link>
             {state.status !== 'done' && (
               <span className="live-indicator">
                 <span className="live-dot"></span>
@@ -286,7 +208,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
         {/* Sandbox Mode banner — persistent conversion hook. Shown when the
             app is deployed on BoDiGi test keys. The whole point: nudge the
             user to own their codebase (GitHub export = Starter). */}
-        {Array.isArray((state as any).sandboxProviders) && (state as any).sandboxProviders.length > 0 && (
+        {sandboxProviders.length > 0 && (
           <div style={{ margin: '0 auto', maxWidth: '72rem', padding: '0 1.5rem' }}>
             <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', background: 'linear-gradient(90deg, rgba(245,158,11,0.12), rgba(16,185,129,0.08))', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '0.75rem', padding: '0.875rem 1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -294,7 +216,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
                 <div>
                   <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#fbbf24' }}>Running in Sandbox Mode</div>
                   <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', marginTop: '0.125rem' }}>
-                    Live on BoDiGi test keys ({(state as any).sandboxProviders.join(', ')}) — payments are test-mode. Connect your GitHub to own your codebase and deploy to your custom domain.
+                    Live on BoDiGi test keys ({sandboxProviders.join(', ')}) — payments are test-mode. Connect your GitHub to own your codebase and deploy to your custom domain.
                   </div>
                 </div>
               </div>
@@ -331,7 +253,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
         <section className="preview-hero">
           <h1>{state.name}</h1>
           <p>{specs?.summary || state.idea}</p>
-          <button className="preview-cta">Get Started →</button>
+          <a href="#deploy" className="preview-cta" style={{ textDecoration: 'none' }}>Get Started →</a>
           {specs && (
             <div className="meta-row" style={{ justifyContent: 'center' }}>
               <span>Target: {specs.targetAudience}</span>
@@ -419,6 +341,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             tier={projectTier}
             isAdmin={projectOwnerRole === 'admin' || viewerIsAdmin}
             initiallyConnected={vercelConnected}
+            existingUrl={state.deploymentUrl ?? null}
           />
           <GitHubExportPanel
             projectId={projectId}
@@ -649,7 +572,6 @@ export default async function PreviewPage({ params }: { params: Promise<{ projec
             }
           `}} />
         )}
-      </body>
-    </html>
+    </>
   );
 }

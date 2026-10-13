@@ -8,7 +8,8 @@
  *   3. Deployed → live URL + redeploy
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 type DeployState =
   | { status: 'idle' }
@@ -21,21 +22,25 @@ export default function VercelDeployPanel({
   tier,
   isAdmin,
   initiallyConnected,
+  existingUrl,
 }: {
   projectId: string;
   tier: string;
   isAdmin: boolean;
   initiallyConnected: boolean;
+  existingUrl?: string | null;
 }) {
-  const [connected, setConnected] = useState(initiallyConnected);
-  const [deploy, setDeploy] = useState<DeployState>({ status: 'idle' });
+  const [connectedRaw, setConnected] = useState(initiallyConnected);
+  // Already deployed? Open in the live state — otherwise the panel says
+  // "Deploy my app" directly under the page's "✓ Deployed" banner.
+  const [deploy, setDeploy] = useState<DeployState>(
+    existingUrl ? { status: 'done', url: existingUrl } : { status: 'idle' }
+  );
 
-  // OAuth round-trip returns here with ?vercel=connected
-  useEffect(() => {
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('vercel') === 'connected') {
-      setConnected(true);
-    }
-  }, []);
+  // OAuth round-trip returns here with ?vercel=connected — derived during
+  // render (an effect would need synchronous setState → cascading renders).
+  const searchParams = useSearchParams();
+  const connected = connectedRaw || searchParams.get('vercel') === 'connected';
 
   const eligible = isAdmin || tier === 'pro' || tier === 'enterprise';
 
@@ -107,7 +112,7 @@ export default function VercelDeployPanel({
           </a>
           <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '0.75rem' }}>
             Running on <em>your</em> Vercel account — attach a custom domain in your Vercel dashboard anytime.
-            BoDiGi's access can be revoked in Vercel Settings → Apps; your app keeps running either way.
+            BoDiGi&apos;s access can be revoked in Vercel Settings → Apps; your app keeps running either way.
           </div>
           {deploy.sandboxProviders && deploy.sandboxProviders.length > 0 && (
             <div style={{ marginTop: '0.75rem', padding: '0.625rem 0.875rem', borderRadius: '0.5rem', background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.25)' }}>
@@ -116,7 +121,7 @@ export default function VercelDeployPanel({
               </div>
               <div style={{ color: '#a3a3a3', fontSize: '0.75rem', marginTop: '0.25rem' }}>
                 Your app is fully working right now — payments run in Stripe test mode and sandbox data is shared.
-                When you're ready for real customers, replace these env vars in{' '}
+                When you&apos;re ready for real customers, replace these env vars in{' '}
                 <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer" style={{ color: '#67e8f9', textDecoration: 'underline' }}>
                   your Vercel project settings
                 </a>{' '}
