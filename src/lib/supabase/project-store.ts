@@ -90,19 +90,37 @@ export async function saveProject(userId: string, projectId: string, state: Proj
     await supabase.from('project_files').insert(fileRows);
   }
 
-  // Save logs (delete + insert latest)
-  if (state.logs.length > 0) {
-    await supabase.from('project_logs').delete().eq('project_id', projectId);
-    const logRows = state.logs.map(l => ({
+  // Save logs — append-only, cursor-based. Logs are never edited or removed,
+  // so instead of delete+insert of the full history we insert only the rows
+  // appended since this process's cursor. Each log line has exactly one
+  // creator process (the one that appended it after its own load point), so
+  // concurrent saves from chain links can never duplicate a line — the old
+  // delete+insert snapshot interleaved across lambdas and wrote every line
+  // exactly 2x (90s relay test, Oct 13).
+  const cursor = logCursor.get(projectId) ?? 0;
+  const newLogs = state.logs.slice(cursor);
+  if (newLogs.length > 0) {
+    const logRows = newLogs.map(l => ({
       project_id: projectId,
       timestamp: l.timestamp,
       agent: l.agent,
       level: l.level,
       message: l.message,
     }));
+    // Batch insert is atomic; advance the cursor only after success so a
+    // failed save retries the same rows next time.
     await supabase.from('project_logs').insert(logRows);
+    logCursor.set(projectId, state.logs.length);
   }
 }
+
+/**
+ * Per-process count of log rows known to be persisted, keyed by project.
+ * Seeded on load (loaded rows are already in the table) and advanced after
+ * each successful insert. Process-local like the project store itself —
+ * correct across chain links because each link re-seeds on rehydrate.
+ */
+const logCursor = new Map<string, number>();
 
 /**
  * Load a project from Supabase for the dashboard/analytics API.
@@ -187,6 +205,10 @@ export async function loadProjectFromSupabase(projectId: string) {
   };
 
   const generatedFiles: GeneratedFile[] = state.generatedFiles;
+
+  // Every loaded log row is already persisted — seed the save cursor so the
+  // next saveProject inserts only lines appended after this load.
+  logCursor.set(projectId, state.logs.length);
 
   return { state, files: generatedFiles, progress: project.progress, userId: project.user_id };
 }
