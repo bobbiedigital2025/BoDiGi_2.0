@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,20 +34,28 @@ export default function LandingPage() {
   // Restore an idea the visitor typed before being sent to log in — a
   // customer should never lose their pitch to a sign-in redirect.
   useEffect(() => {
-    const pending = sessionStorage.getItem('bodigi_pending_idea');
-    if (pending) {
-      setIdea(pending);
-      sessionStorage.removeItem('bodigi_pending_idea');
-    }
+    // Deferred a tick: restoring sets state, and synchronous setState inside
+    // an effect triggers cascading renders (react-hooks error).
+    const t = setTimeout(() => {
+      const pending = sessionStorage.getItem('bodigi_pending_idea');
+      if (pending) {
+        setIdea(pending);
+        sessionStorage.removeItem('bodigi_pending_idea');
+      }
+    }, 0);
+    return () => clearTimeout(t);
   }, []);
 
-  // Check if user has already accepted terms (stored in localStorage for UX)
+  // Check if user has already accepted terms (stored in localStorage for UX).
+  // Client-only storage read on user change — idiomatic mount effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (user) {
       const accepted = localStorage.getItem(`terms_accepted_${user.id}`);
       if (accepted) setTermsAccepted(true);
     }
   }, [user]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const doSubmit = async () => {
     const finalIdea = pendingBrief.current ?? idea;
@@ -115,7 +124,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-4 text-sm text-white/60">
             <a href="#what-you-get" className="hover:text-white transition-colors hidden sm:inline">What you get</a>
             <a href="#how" className="hover:text-white transition-colors hidden sm:inline">How it works</a>
-            <a href="/showcase" className="hover:text-white transition-colors hidden sm:inline">Showcase</a>
+            <Link href="/showcase" className="hover:text-white transition-colors hidden sm:inline">Showcase</Link>
             <a href="/pricing" className="hover:text-white transition-colors hidden sm:inline">Pricing</a>
             {user ? (
               <>
@@ -453,7 +462,7 @@ export default function LandingPage() {
             <p className="mt-2 text-xs text-white/30">BoDiGi 2.0 provides tools and a head start. Using the Service does not guarantee business success or revenue — see our <a href="/terms" className="underline hover:text-white/50">Terms</a>.</p>
             <div className="flex items-center justify-center gap-4 mt-3">
               <a href="/setup" className="hover:text-white/60 transition">Setup Guide</a>
-              <a href="/showcase" className="hover:text-white/60 transition">Showcase</a>
+              <Link href="/showcase" className="hover:text-white/60 transition">Showcase</Link>
               <a href="/pricing" className="hover:text-white/60 transition">Pricing</a>
               <a href="/terms" className="hover:text-white/60 transition">Terms of Service</a>
               <a href="/privacy" className="hover:text-white/60 transition">Privacy Policy</a>

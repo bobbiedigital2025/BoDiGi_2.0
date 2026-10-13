@@ -95,6 +95,9 @@ export default function PricingPage() {
   const [promo, setPromo] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // window.location.href assignments inside are deliberate hard navigations
+  // (Stripe checkout / login redirect) in an event handler — never render.
+  /* eslint-disable react-hooks/immutability */
   const handleUpgrade = async (tierId: string) => {
     if (tierId === 'free') return;
 
@@ -130,6 +133,7 @@ export default function PricingPage() {
       setLoading(null);
     }
   };
+  /* eslint-enable react-hooks/immutability */
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -155,7 +159,7 @@ export default function PricingPage() {
             Simple, Transparent Pricing
           </h2>
           <p className="text-white/60 max-w-xl mx-auto mb-4">
-            Start free. Upgrade when you're ready to own your apps.
+            Start free. Upgrade when you&apos;re ready to own your apps.
             Every plan includes our AI agent team that builds your app from a single prompt.
           </p>
 

@@ -33,10 +33,10 @@ async function runTemplateQa(
 
   const paths = files.map((f: any) => f.path as string);
 
-  // Structure: a Next.js app must have a package.json and an entry page
-  if (!paths.some((p) => p === 'package.json' || p.endsWith('/package.json'))) {
-    failures.push('Missing package.json — the app cannot install or build.');
-  }
+  // Structure: the app needs an entry page so the fork has a working home
+  // route. (No package.json check — platform builds intentionally don't
+  // ship one; export-scaffold synthesizes it at deploy/export time, so
+  // requiring it here would reject every build the platform produces.)
   if (!paths.some((p) => /(^|\/)app\/page\.tsx$/.test(p) || /(^|\/)src\/app\/page\.tsx$/.test(p) || /(^|\/)pages\/index\.(tsx|jsx|js)$/.test(p))) {
     failures.push('Missing entry page (app/page.tsx) — the app has no home route.');
   }

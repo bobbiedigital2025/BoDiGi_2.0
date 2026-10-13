@@ -26,6 +26,8 @@ export default function VersionHistory({ projectId, tier, isAdmin }: {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  // Captured when the list loads so relative times never call Date.now()
+  // during render (impure — and they'd silently freeze).
   const [now, setNow] = useState<number>(0);
 
   const eligible = isAdmin || tier === 'pro' || tier === 'enterprise';
@@ -34,6 +36,7 @@ export default function VersionHistory({ projectId, tier, isAdmin }: {
     try {
       const res = await fetch(`/api/generate/${projectId}/history`);
       const data = await res.json();
+      setNow(Date.now());
       setHistory(data.history || []);
       // Anchor relative timestamps at load time — Date.now() can't be
       // called during render (impure-function rule).

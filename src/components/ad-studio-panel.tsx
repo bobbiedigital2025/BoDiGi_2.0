@@ -7,7 +7,7 @@
  * talking-avatar video — 16:9 or 9:16 vertical for shorts.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -84,9 +84,15 @@ export function AdStudioPanel({
   const [voiceId, setVoiceId] = useState('');
   // Vertical-first: the ad kits are written for Reels/TikTok/Shorts.
   const [dimension, setDimension] = useState<'16:9' | '9:16'>('9:16');
-  const [rendering, setRendering] = useState(false);
+  // Manual flag for button-initiated renders; combined with render_status
+  // below so the resume-polling effect never needs a synchronous setState.
+  const [renderRequested, setRenderRequested] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Derived: spinner shows for button-initiated renders AND whenever the
+  // ad's stored status says a render is in flight (e.g. resumed polling).
+  const rendering = renderRequested || ad?.render_status === 'rendering';
 
   // Probe session role once: admin (owner) renders free; subscribers pay
   useEffect(() => {
@@ -96,36 +102,9 @@ export function AdStudioPanel({
       .catch(() => {});
   }, []);
 
-  const startPolling = (videoId: string) => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    setRendering(true);
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/generate/${projectId}/ad/render?video_id=${encodeURIComponent(videoId)}`);
-        const json = await res.json();
-        if (json.status === 'completed' && json.videoUrl) {
-          if (pollRef.current) clearInterval(pollRef.current);
-          setRendering(false);
-          setAd((prev) => prev ? {
-            ...prev,
-            render_status: 'ready',
-            render: { ...prev.render, video_url: json.videoUrl },
-          } : prev);
-        } else if (json.status === 'failed') {
-          if (pollRef.current) clearInterval(pollRef.current);
-          setRendering(false);
-          setRenderError(json.error || 'Render failed — check HeyGen credits');
-          setAd((prev) => prev ? { ...prev, render_status: 'failed' } : prev);
-        }
-      } catch {
-        // transient network error — keep polling, the interval will retry
-      }
-    }, 10000);
-  };
-
-  const hasAd = !!ad;
 
   // Load avatar inventory once when an ad exists and HeyGen may be configured
+  const hasAd = !!ad;
   useEffect(() => {
     if (!hasAd) return;
     let cancelled = false;
@@ -149,19 +128,43 @@ export function AdStudioPanel({
     return () => { cancelled = true; };
   }, [projectId, hasAd]);
 
+  const startPolling = useCallback((videoId: string) => {
+
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/generate/${projectId}/ad/render?video_id=${encodeURIComponent(videoId)}`);
+        const json = await res.json();
+        if (json.status === 'completed' && json.videoUrl) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setRenderRequested(false);
+          setAd((prev) => prev ? {
+            ...prev,
+            render_status: 'ready',
+            render: { ...prev.render, video_url: json.videoUrl },
+          } : prev);
+        } else if (json.status === 'failed') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setRenderRequested(false);
+          setRenderError(json.error || 'Render failed — check HeyGen credits');
+          setAd((prev) => prev ? { ...prev, render_status: 'failed' } : prev);
+        }
+      } catch {
+        // transient network error — keep polling, the interval will retry
+      }
+    }, 10000);
+  }, [projectId]);
+
   // If a render is already in flight (render_status === 'rendering'), resume polling
+  const renderStatus = ad?.render_status;
+  const renderVideoId = ad?.render?.video_id;
   useEffect(() => {
-    if (ad?.render_status !== 'rendering' || !ad.render?.video_id) return;
-    // Deferred a tick: startPolling sets state, and synchronous setState
-    // inside an effect triggers cascading renders (react-hooks error).
-    const videoId = ad.render.video_id;
-    const t = setTimeout(() => startPolling(videoId), 0);
-    return () => {
-      clearTimeout(t);
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ad?.render_status, ad?.render?.video_id]);
+    if (renderStatus === 'rendering' && renderVideoId) {
+      startPolling(renderVideoId);
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [renderStatus, renderVideoId, startPolling]);
+
 
   const generate = async () => {
     setBusy(true);
@@ -188,7 +191,7 @@ export function AdStudioPanel({
       setRenderError('Pick an avatar and a voice first');
       return;
     }
-    setRendering(true);
+    setRenderRequested(true);
     try {
       const chosen = avatars.find((a) => a.avatar_id === avatarId);
       const payload = {
@@ -222,10 +225,10 @@ export function AdStudioPanel({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Checkout failed');
-      setRendering(false);
+      setRenderRequested(false);
       if (json.checkoutUrl) window.location.href = json.checkoutUrl;
     } catch (e) {
-      setRendering(false);
+      setRenderRequested(false);
       setRenderError(e instanceof Error ? e.message : 'Render submission failed');
     }
   };
