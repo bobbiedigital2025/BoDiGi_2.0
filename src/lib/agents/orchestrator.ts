@@ -442,7 +442,11 @@ export class AppForgeOrchestrator {
     // styling pass below can wire globals.css into the layout it finds —
     // if the layout is created after, the app ships unstyled (the exact
     // regression this scaffold exists to prevent).
-    if (!has('src/app/layout.tsx')) {
+    // Check BOTH app trees: a project whose app lives at root app/ must NOT
+    // get a parallel src/app/* stub tree injected alongside it (SquishDough,
+    // Oct 14 — the stub tree later confused the modify pass into editing
+    // placeholders instead of the customer's real pages).
+    if (!has('src/app/layout.tsx') && !has('app/layout.tsx')) {
       add('src/app/layout.tsx', `import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
@@ -460,7 +464,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 }
 `);
     }
-    if (!has('src/app/page.tsx')) {
+    if (!has('src/app/page.tsx') && !has('app/page.tsx')) {
       add('src/app/page.tsx', `export default function Home() {
   return (
     <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>

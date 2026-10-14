@@ -79,7 +79,6 @@ export async function saveProject(userId: string, projectId: string, state: Proj
 
   // Save files (delete + insert to avoid duplicates)
   if (files.length > 0) {
-    await supabase.from('project_files').delete().eq('project_id', projectId);
     const fileRows = files.map(f => ({
       project_id: projectId,
       path: f.path,
@@ -87,7 +86,36 @@ export async function saveProject(userId: string, projectId: string, state: Proj
       agent: f.agent,
       status: f.status,
     }));
-    await supabase.from('project_files').insert(fileRows);
+
+    // SHRINK GUARD (Oct 14, SquishDough modify-pass incident): the modify
+    // route loaded a stale/partial in-memory file set on a warm lambda and
+    // this delete+insert then wiped the customer's real files. Legitimate
+    // saves only ever grow the file set or rewrite it at the same size
+    // (builds accumulate monotonically; modify/day2/history re-save the set
+    // they loaded). An incoming set SMALLER than what the DB holds is by
+    // definition missing files — never let it destroy rows. Patch-write the
+    // incoming paths instead and keep everything else.
+    const { count } = await supabase
+      .from('project_files')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', projectId);
+    const existing = count ?? 0;
+
+    if (existing > files.length) {
+      console.error(
+        `[project-store] SHRINK GUARD tripped for ${projectId}: incoming ${files.length} file(s) < stored ${existing}. ` +
+        `Patch-writing incoming paths only — a full overwrite would have destroyed ${existing - files.length} file(s).`
+      );
+      await supabase
+        .from('project_files')
+        .delete()
+        .eq('project_id', projectId)
+        .in('path', files.map(f => f.path));
+      await supabase.from('project_files').insert(fileRows);
+    } else {
+      await supabase.from('project_files').delete().eq('project_id', projectId);
+      await supabase.from('project_files').insert(fileRows);
+    }
   }
 
   // Save logs — append-only, cursor-based. Logs are never edited or removed,

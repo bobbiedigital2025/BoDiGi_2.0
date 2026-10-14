@@ -128,7 +128,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   }
 
+  // Load with an integrity check (Oct 14, SquishDough incident): the
+  // in-memory store can be a STALE mid-build snapshot on a warm lambda —
+  // one such load wiped a customer's real files when the degraded set was
+  // saved back. The DB is canonical for completed projects. Prefer the
+  // in-memory set only when it is strictly LARGER (i.e. an actively running
+  // build ahead of its own saves); a tie goes to the DB because in-memory
+  // can lag edits persisted by other lambdas at the same file count.
   const inMemory = getProject(projectId);
+  const sbProject = await loadProjectFromSupabase(projectId);
+  if (!sbProject && !inMemory) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  }
+
   let projectName: string;
   let projectIdea: string;
   let files: GeneratedFile[];
@@ -136,30 +148,54 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let fullState: any = null;
   let progress = 100;
 
-  if (inMemory) {
-    projectName = inMemory.state.name;
-    projectIdea = inMemory.state.idea;
-    files = inMemory.files;
-    fullState = inMemory.state;
-    progress = inMemory.progress;
+  const useInMemory = !!inMemory && (!sbProject || inMemory.files.length > sbProject.files.length);
+  if (useInMemory) {
+    projectName = inMemory!.state.name;
+    projectIdea = inMemory!.state.idea;
+    files = inMemory!.files;
+    fullState = inMemory!.state;
+    progress = inMemory!.progress;
   } else {
-    const sbProject = await loadProjectFromSupabase(projectId);
-    if (!sbProject) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    projectName = sbProject!.state.name;
+    projectIdea = sbProject!.state.idea;
+    files = sbProject!.files || [];
+    fullState = sbProject!.state;
+    progress = sbProject!.progress;
+    if (inMemory && inMemory.files.length !== files.length) {
+      console.warn(
+        `[modify] ${projectId}: in-memory set (${inMemory.files.length} files) ignored — ` +
+        `canonical DB set has ${files.length}. Stale warm-lambda load prevented.`
+      );
     }
-    projectName = sbProject.state.name;
-    projectIdea = sbProject.state.idea;
-    files = sbProject.files || [];
-    fullState = sbProject.state;
-    progress = sbProject.progress;
   }
 
   if (files.length === 0) {
     return NextResponse.json({ error: 'No files to modify yet — wait for the build to finish.' }, { status: 400 });
   }
 
+  // Dual-tree collapse: builds whose app lives at root app/ were also given a
+  // tiny generated src/app/* stub tree by the build-time scaffold (fixed in
+  // orchestrator.ts going forward). When both twins exist, show the AI only
+  // the substantial one — otherwise it can edit the placeholder instead of
+  // the real page (exactly what happened to SquishDough at 04:53).
+  const collapseDualAppTree = (all: GeneratedFile[]): GeneratedFile[] => {
+    const byPath = new Map(all.map((f) => [f.path, f]));
+    const drop = new Set<string>();
+    for (const rootPath of ['app/layout.tsx', 'app/page.tsx', 'app/globals.css']) {
+      const srcPath = `src/${rootPath}`;
+      const rootTwin = byPath.get(rootPath);
+      const srcTwin = byPath.get(srcPath);
+      if (rootTwin && srcTwin) {
+        const smaller = rootTwin.content.length <= srcTwin.content.length ? rootTwin : srcTwin;
+        drop.add(smaller.path);
+      }
+    }
+    return all.filter((f) => !drop.has(f.path));
+  };
+  const contextFiles = collapseDualAppTree(files);
+
   // 4. Build the file context (editable files only, truncated sanely)
-  const editableFiles = files.filter((f) => !FORBIDDEN_PATH.test(f.path));
+  const editableFiles = contextFiles.filter((f) => !FORBIDDEN_PATH.test(f.path));
   const protectedFiles = files.filter((f) => FORBIDDEN_PATH.test(f.path));
 
   const fileContext = editableFiles
@@ -267,24 +303,32 @@ Return the JSON with only the files that need to change.`;
     message: `MOD-SNAPSHOT before "${instruction.slice(0, 120)}": ${JSON.stringify(snapshot).slice(0, 50000)}`,
   });
 
-  // 8. Apply edits to the file set and persist
-  for (const edit of validEdits) {
-    const file = fileMap.get(edit.path)!;
-    file.content = edit.content;
-  }
-
-  const newFiles = Array.from(fileMap.values());
-
+  // 8. Apply edits — PATCH-WRITE ONLY THE TOUCHED FILES. Never delete+insert
+  // the whole set from here: if the load was degraded, a full overwrite turns
+  // it into customer data loss (SquishDough 04:53). Unedited rows are not
+  // ours to rewrite — targeted delete+insert per edited path keeps the rest
+  // of the table exactly as it was.
   try {
-    if (inMemory) {
-      // Update in-memory project so the preview re-renders immediately
-      inMemory.files.length = 0;
-      inMemory.files.push(...newFiles);
-      // Persist to Supabase too
-      await saveProject(userId, projectId, fullState, newFiles, progress);
-    } else {
-      await saveProject(userId, projectId, fullState, newFiles, progress);
+    for (const edit of validEdits) {
+      const original = fileMap.get(edit.path)!;
+      await admin
+        .from('project_files')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('path', edit.path);
+      await admin.from('project_files').insert({
+        project_id: projectId,
+        path: edit.path,
+        content: edit.content,
+        agent: original.agent,
+        status: original.status,
+      });
+      original.content = edit.content; // keep the loaded set (and any warm in-memory copy) fresh
     }
+
+    // Persist state (name/status/tasks/logs) WITHOUT touching project_files —
+    // saveProject skips file writes entirely for an empty file list.
+    await saveProject(userId, projectId, fullState, [], progress);
   } catch {
     return NextResponse.json(
       { error: 'Edit was generated but could not be saved. Nothing was changed.' },
