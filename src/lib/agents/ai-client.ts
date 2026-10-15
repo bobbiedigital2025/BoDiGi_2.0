@@ -13,6 +13,10 @@
  * structured output. Override with AI_MODEL env var (any OpenRouter
  * model slug, e.g. "google/gemini-2.5-flash", "anthropic/claude-3.5-haiku").
  *
+ * Codegen roles (database, backend, frontend) default to Claude Sonnet 5.5
+ * on OpenRouter — build quality IS the product. Override per role with
+ * AI_MODEL_DATABASE / AI_MODEL_BACKEND / AI_MODEL_FRONTEND.
+ *
  * When neither key is configured, agents fall back to their default
  * generators (boilerplate mode).
  */
@@ -24,6 +28,16 @@ const TELNYX_URL = 'https://api.telnyx.com/v2/ai/chat/completions';
 const DEFAULT_MODEL = process.env.AI_MODEL || 'openai/gpt-4o-mini';
 /** Telnyx model if falling back to Telnyx. */
 const TELNYX_MODEL = 'MiniMaxAI/MiniMax-M3-MXFP8';
+
+/** Codegen quality floor for the three code-writing roles (OpenRouter only). */
+const CODEGEN_MODEL = 'anthropic/claude-sonnet-5.5';
+const CODEGEN_ROLES = new Set(['database', 'backend', 'frontend']);
+
+/** Approximate per-token dollar cost by model, for usage analytics. */
+const MODEL_PRICE: Record<string, { input: number; output: number }> = {
+  'openai/gpt-4o-mini': { input: 0.00000015, output: 0.0000006 },
+  'anthropic/claude-sonnet-5.5': { input: 0.000002, output: 0.00001 },
+};
 
 interface Provider {
   url: string;
@@ -69,7 +83,10 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
   // Per-role model override: AI_MODEL_FRONTEND / AI_MODEL_BACKEND / AI_MODEL_DATABASE
   // let codegen run a stronger model while docs/summary calls stay on the default.
   const roleModel = role ? process.env[`AI_MODEL_${role.toUpperCase()}`] : undefined;
-  const model = roleModel || provider.model;
+  const model = roleModel
+    || (provider.label === 'OpenRouter' && role && CODEGEN_ROLES.has(role)
+      ? CODEGEN_MODEL
+      : provider.model);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90000); // 90s max per call
@@ -115,11 +132,11 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
     const usage = data.usage || {};
     const inputTokens = usage.prompt_tokens || 0;
     const outputTokens = usage.completion_tokens || 0;
-    // gpt-4o-mini pricing: ~$0.15/M input, $0.60/M output → cents per token
-    const estCostCents = (inputTokens * 0.00000015 + outputTokens * 0.0000006);
+    const price = MODEL_PRICE[model] ?? MODEL_PRICE['openai/gpt-4o-mini'];
+    const estCostCents = (inputTokens * price.input + outputTokens * price.output);
     logAiUsage({
       kind: currentCallKind || 'other',
-      model: provider.model,
+      model,
       inputTokens,
       outputTokens,
       estCostCents,
