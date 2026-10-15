@@ -17,9 +17,24 @@ import type { GeneratedFile } from './types';
 import { ensureImportIntegrity } from './import-integrity';
 import { ensureStylingScaffold } from './styling-scaffold';
 import { runPreflight, preflightLogLines } from '../deploy/preflight';
+import { collapseToSingleTree, resolveTreeRoot, treeDir } from './tree-root';
 
 export function ensureExportScaffold(projectName: string, files: GeneratedFile[], seed?: string): GeneratedFile[] {
-  const has = (path: string) => files.some((f) => f.path === path);
+  // Single-tree guarantee FIRST, before anything else touches the set:
+  // legacy projects carry both app/ and src/app/ trees, and Next serves
+  // root app/ while IGNORING src/app — a split export ships half-dead
+  // routes, and a stub page in the served tree shows the customer their
+  // raw prompt as the homepage. Collapse to the declared tree (stub-loses,
+  // orphan-move, import remap, dupe canonicalization), then scaffold.
+  const treeRoot = resolveTreeRoot(null); // platform default 'app' — export has no specs in scope
+  const appDir = treeDir(treeRoot);
+  const collapse = collapseToSingleTree(files, treeRoot);
+  for (const m of collapse.moved) console.warn(`Export tree collapse: moved ${m.from} → ${m.to}`);
+  for (const d of collapse.dropped) console.warn(`Export tree collapse: dropped ${d.path} (${d.reason})`);
+  for (const r of collapse.remapped) console.warn(`Export tree collapse: remapped import in ${r.path}: ${r.from} → ${r.to}`);
+  const base = collapse.files;
+
+  const has = (path: string) => base.some((f) => f.path === path);
   const added: GeneratedFile[] = [];
   const add = (path: string, content: string) => {
     added.push({ path, content, agent: 'devops', status: 'generated' });
@@ -78,14 +93,14 @@ export function ensureExportScaffold(projectName: string, files: GeneratedFile[]
   // Styling backbone: every export must actually RENDER its design
   // (globals.css + tailwind config + deps). Seed matches the codegen
   // design-brief seed so the CSS personality matches the prompt's.
-  const all = [...files, ...added];
+  const all = [...base, ...added];
 
   // Root layout/page: Next requires a root layout; the import-integrity
   // pass can't see these (nothing imports them), so old builds missing
   // them exported unbuildable. Same guarantee as the orchestrator path.
   const appNameSafe = projectName.replace(/'/g, "");
   if (!all.some(f => f.path === 'src/app/layout.tsx') && !all.some(f => f.path === 'app/layout.tsx')) {
-    all.push({ path: 'src/app/layout.tsx', content: `import type { Metadata } from 'next';
+    all.push({ path: `${appDir}/layout.tsx`, content: `import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
@@ -104,7 +119,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     console.warn('Export scaffold: added missing root layout.tsx');
   }
   if (!all.some(f => f.path === 'src/app/page.tsx') && !all.some(f => f.path === 'app/page.tsx')) {
-    all.push({ path: 'src/app/page.tsx', content: `export default function Home() {
+    all.push({ path: `${appDir}/page.tsx`, content: `export default function Home() {
   return (
     <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>
       <h1>${appNameSafe}</h1>
@@ -116,7 +131,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     console.warn('Export scaffold: added missing root page.tsx');
   }
 
-  ensureStylingScaffold(seed || projectName, all);
+  ensureStylingScaffold(seed || projectName, all, undefined, treeRoot);
 
   // Preflight: bridge cross-tree modules to where the compiler looks and
   // declare every imported package in package.json — BEFORE the stub pass,

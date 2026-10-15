@@ -106,7 +106,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const systemPrompt = `You are the BoDiGi Engagement Loop Agent. You wire a gamified engagement loop into a Next.js app: a rewards system where users complete actions and unlock rewards ONLY after completing them.
 
 The app gets:
-1. A "Rewards" page (src/app/(dashboard)/rewards/page.tsx or matching the app's route structure) showing each loop as a card: the action, the reward, a locked/unlocked state, and a CTA button
+1. A "Rewards" page (app/(dashboard)/rewards/page.tsx or matching the app's route structure) showing each loop as a card: the action, the reward, a locked/unlocked state, and a CTA button
 2. Action tracking: completing an action (e.g. clicking "Try the app", copying an invite link, sharing to Facebook via a share URL, upgrading) records it — use localStorage keyed per loop (loop_<action>) since this app may not have a rewards table; keep it dependency-free
 3. Redemption gating: the reward (discount code, 24h feature unlock) is ONLY revealed/redeemable after the action is marked complete. For time-boxed rewards (free_feature_24h), store the unlock timestamp and check expiry
 4. Share actions generate real share URLs (facebook.com/sharer with the app URL, X intent links)
