@@ -79,7 +79,16 @@ export async function saveProject(userId: string, projectId: string, state: Proj
 
   // Save files (delete + insert to avoid duplicates)
   if (files.length > 0) {
-    const fileRows = files.map(f => ({
+    // Dedupe by path (last wins) before writing: the relay's rehydrate can
+    // re-run a straddling task and push its output files into the store
+    // array twice (Sparkle Clean build, Oct 15 — 38 rows / 28 distinct
+    // paths, 10 paths written 2x by one save batch). project_files has no
+    // unique constraint, so in-array dups land as duplicate rows.
+    const deduped = [...files.reduce((map, f) => map.set(f.path, f), new Map<string, GeneratedFile>()).values()];
+    if (deduped.length !== files.length) {
+      console.warn(`[project-store] ${projectId}: dropped ${files.length - deduped.length} duplicate path row(s) before save`);
+    }
+    const fileRows = deduped.map(f => ({
       project_id: projectId,
       path: f.path,
       content: f.content,
@@ -101,16 +110,16 @@ export async function saveProject(userId: string, projectId: string, state: Proj
       .eq('project_id', projectId);
     const existing = count ?? 0;
 
-    if (existing > files.length) {
+    if (existing > deduped.length) {
       console.error(
-        `[project-store] SHRINK GUARD tripped for ${projectId}: incoming ${files.length} file(s) < stored ${existing}. ` +
-        `Patch-writing incoming paths only — a full overwrite would have destroyed ${existing - files.length} file(s).`
+        `[project-store] SHRINK GUARD tripped for ${projectId}: incoming ${deduped.length} file(s) < stored ${existing}. ` +
+        `Patch-writing incoming paths only — a full overwrite would have destroyed ${existing - deduped.length} file(s).`
       );
       await supabase
         .from('project_files')
         .delete()
         .eq('project_id', projectId)
-        .in('path', files.map(f => f.path));
+        .in('path', deduped.map(f => f.path));
       await supabase.from('project_files').insert(fileRows);
     } else {
       await supabase.from('project_files').delete().eq('project_id', projectId);
