@@ -109,6 +109,14 @@ export interface ProjectSpecs {
   monetization: string | null;
   marketplace: 'web' | 'ios' | 'shopify' | 'google-play' | 'multi';
   requiredApis: RequiredApi[];
+  /**
+   * Which app-router tree this project builds into: root `app/` (platform
+   * default — Next serves root over src/app when both exist) or `src/app/`.
+   * Declared at plan time and persisted; every seam (codegen, scaffold,
+   * styling, export, modify) reads it via resolveTreeRoot(). Absent on
+   * pre-Oct-2026 specs — the resolver falls back to PLATFORM_TREE_ROOT.
+   */
+  appTreeRoot?: 'app' | 'src/app';
 }
 
 export interface RequiredApi {

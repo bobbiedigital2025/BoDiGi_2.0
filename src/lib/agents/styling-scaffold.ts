@@ -140,14 +140,20 @@ export default config;
 /**
  * Ensure the styling backbone exists in the file set. Mutates and returns
  * the array. Only creates missing files — agent-authored CSS is sacred.
+ * All app-tree files land in the DECLARED tree (treeRoot): placing globals
+ * in the other tree is how apps shipped unstyled — a stub globals.css in
+ * the served tree satisfied the layout's import while the real personality
+ * skin sat unused in src/ (SquishDough autopsy, Oct 15 2026).
  */
 export function ensureStylingScaffold(
   seed: string,
   files: GeneratedFile[],
-  log?: (msg: string) => void
+  log?: (msg: string) => void,
+  treeRoot: 'app' | 'src/app' = 'app'
 ): GeneratedFile[] {
   const has = (path: string) => files.some(f => f.path === path);
   const skin = skinFor(seed);
+  const appDir = treeRoot === 'src/app' ? 'src/app' : 'app';
 
   // 1. package.json deps (the scaffold guarantee should have created one
   //    before we run; if not, skip dep patching rather than fabricate)
@@ -179,9 +185,9 @@ export function ensureStylingScaffold(
     log?.('Styling scaffold: added postcss.config.mjs (Tailwind v4)');
   }
 
-  // 3. globals.css carrying the personality
-  if (!has('src/app/globals.css')) {
-    files.push({ path: 'src/app/globals.css', content: globalsCssFor(skin), agent: 'devops', status: 'generated' });
+  // 3. globals.css carrying the personality — in the declared tree
+  if (!has(`${appDir}/globals.css`)) {
+    files.push({ path: `${appDir}/globals.css`, content: globalsCssFor(skin), agent: 'devops', status: 'generated' });
     log?.(`Styling scaffold: added globals.css with design personality skin`);
   }
 
@@ -191,8 +197,10 @@ export function ensureStylingScaffold(
   //    means an unstyled app. Require an actual import, not a comment.
   const layout = files.find(f => /(^|\/)app\/layout\.(tsx|ts|jsx|js)$/.test(f.path));
   if (layout && !/import\s+['"][^'"]*globals\.css['"]/.test(layout.content)) {
-    const cssPath = layout.path.startsWith('src/') ? './globals.css' : './src/app/globals.css';
-    layout.content = `import '${cssPath}';\n` + layout.content;
+    // Single-tree guarantee: layout and globals.css live in the same
+    // directory, so the wire is always './globals.css'. (The old cross-tree
+    // wire './src/app/globals.css' from a root layout never resolved.)
+    layout.content = `import './globals.css';\n` + layout.content;
     log?.('Styling scaffold: wired globals.css into root layout');
   }
 

@@ -29,6 +29,7 @@ import { callAI, hasAIKey, setUsageContext } from '@/lib/agents/ai-client';
 import { classifyContent } from '@/lib/agents/concept-gate';
 import { learnFromModification } from '@/lib/agents/build-memory';
 import type { GeneratedFile } from '@/lib/agents/types';
+import { collapseToSingleTree, PLATFORM_TREE_ROOT } from '@/lib/agents/tree-root';
 
 const FORBIDDEN_PATH = /(^|\/)(\.env|.*auth.*|.*middleware.*|schema\.sql|seed\.sql|api\/.*route\.ts)/i;
 const MAX_FILE_CHARS = 40_000; // keep prompt under control
@@ -195,26 +196,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'No files to modify yet — wait for the build to finish.' }, { status: 400 });
   }
 
-  // Dual-tree collapse: builds whose app lives at root app/ were also given a
-  // tiny generated src/app/* stub tree by the build-time scaffold (fixed in
-  // orchestrator.ts going forward). When both twins exist, show the AI only
-  // the substantial one — otherwise it can edit the placeholder instead of
-  // the real page (exactly what happened to SquishDough at 04:53).
-  const collapseDualAppTree = (all: GeneratedFile[]): GeneratedFile[] => {
-    const byPath = new Map(all.map((f) => [f.path, f]));
-    const drop = new Set<string>();
-    for (const rootPath of ['app/layout.tsx', 'app/page.tsx', 'app/globals.css']) {
-      const srcPath = `src/${rootPath}`;
-      const rootTwin = byPath.get(rootPath);
-      const srcTwin = byPath.get(srcPath);
-      if (rootTwin && srcTwin) {
-        const smaller = rootTwin.content.length <= srcTwin.content.length ? rootTwin : srcTwin;
-        drop.add(smaller.path);
-      }
-    }
-    return all.filter((f) => !drop.has(f.path));
-  };
-  const contextFiles = collapseDualAppTree(files);
+  // Single-tree collapse for the AI context: builds whose app lives at root
+  // app/ were also given a tiny generated src/app/* stub tree by the
+  // build-time scaffold. Show the AI the canonical single tree (stub-loses,
+  // orphan-move) — otherwise it can edit the placeholder instead of the
+  // real page (exactly what happened to SquishDough at 04:53).
+  const contextFiles = collapseToSingleTree(files, PLATFORM_TREE_ROOT).files;
 
   // 4. Build the file context (editable files only, truncated sanely)
   const editableFiles = contextFiles.filter((f) => !FORBIDDEN_PATH.test(f.path));

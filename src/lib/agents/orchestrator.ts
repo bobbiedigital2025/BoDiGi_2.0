@@ -25,6 +25,7 @@ import { AGENT_ROLES } from './types';
 import { ensureImportIntegrity } from './import-integrity';
 import { ensureStylingScaffold } from './styling-scaffold';
 import { reconcileDependencies, type PreflightReport } from '../deploy/preflight';
+import { collapseToSingleTree, resolveTreeRoot, treeDir, PLATFORM_TREE_ROOT } from './tree-root';
 
 const DEFAULT_CONFIG: OrchestratorConfig = {
   maxConcurrentAgents: 5,
@@ -389,6 +390,22 @@ export class AppForgeOrchestrator {
       this.log('devops', 'info', `Scaffold guarantee: added missing ${path}`);
     };
 
+    // Single-tree guarantee FIRST: fold any dual app/ + src/app/ split into
+    // the declared tree (stub-loses, orphan-move, import remap, dupe
+    // canonicalization) before any scaffold pass adds more files. Whatever
+    // survives this is the ONE tree the app builds from — Next serves root
+    // app/ and ignores src/app when both exist, so a leftover split tree
+    // silently shadows real pages (SquishDough/ChefDrop, Oct 2026).
+    const treeRoot = resolveTreeRoot(this.state.specs as { appTreeRoot?: string } | null);
+    const collapse = collapseToSingleTree(this.state.generatedFiles, treeRoot);
+    if (collapse.moved.length || collapse.dropped.length || collapse.remapped.length) {
+      this.state.generatedFiles = collapse.files;
+      for (const m of collapse.moved) this.log('devops', 'info', `Tree collapse: moved ${m.from} → ${m.to}`);
+      for (const d of collapse.dropped) this.log('devops', 'info', `Tree collapse: dropped ${d.path} (${d.reason})`);
+      for (const r of collapse.remapped) this.log('devops', 'info', `Tree collapse: remapped import in ${r.path}: ${r.from} → ${r.to}`);
+    }
+    const appDir = treeDir(treeRoot);
+
     if (!has('package.json')) {
       add('package.json', JSON.stringify({
         name: this.state.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'bodigi-app',
@@ -428,7 +445,7 @@ export class AppForgeOrchestrator {
           jsx: 'preserve',
           incremental: true,
           plugins: [{ name: 'next' }],
-          paths: { '@/*': ['./*'] },
+          paths: treeRoot === 'app' ? { '@/*': ['./*'] } : { '@/*': ['./src/*'] },
         },
         include: ['next-env.d.ts', '**/*.ts', '**/*.tsx', '.next/types/**/*.ts'],
         exclude: ['node_modules'],
@@ -448,7 +465,7 @@ export class AppForgeOrchestrator {
     // Oct 14 — the stub tree later confused the modify pass into editing
     // placeholders instead of the customer's real pages).
     if (!has('src/app/layout.tsx') && !has('app/layout.tsx')) {
-      add('src/app/layout.tsx', `import type { Metadata } from 'next';
+      add(`${appDir}/layout.tsx`, `import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
@@ -466,7 +483,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 `);
     }
     if (!has('src/app/page.tsx') && !has('app/page.tsx')) {
-      add('src/app/page.tsx', `export default function Home() {
+      add(`${appDir}/page.tsx`, `export default function Home() {
   return (
     <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>
       <h1>${this.state.name.replace(/'/g, "")}</h1>
@@ -481,7 +498,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     // not just prompt words. Same seed as the codegen design brief so the
     // CSS skin matches the direction the agent was given.
     const stylingSeed = `${this.state.name}|${(this.state.specs as { summary?: string } | null)?.summary || ''}`;
-    ensureStylingScaffold(stylingSeed, this.state.generatedFiles, (msg) => this.log('devops', 'info', msg));
+    ensureStylingScaffold(stylingSeed, this.state.generatedFiles, (msg) => this.log('devops', 'info', msg), treeRoot);
 
     // Import integrity: any module imported but never written gets a typed
     // stub, so the file set compiles no matter what an agent missed.
@@ -561,6 +578,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       case 'pm':
         // Pipeline passes { specs } — unwrap so state.specs IS the specs object
         this.state.specs = (task.output.specs ?? task.output) as unknown as ProjectState['specs'];
+        // Tree-root declaration: every seam reads this via resolveTreeRoot().
+        // Platform default 'app' (root) — Next serves root over src/app when
+        // both exist, and the shipped tsconfig maps @/* to ./*.
+        if (this.state.specs && typeof this.state.specs === 'object' && !this.state.specs.appTreeRoot) {
+          this.state.specs.appTreeRoot = PLATFORM_TREE_ROOT;
+        }
         this.state.status = 'building';
         this.state.currentPhase = 1;
         break;

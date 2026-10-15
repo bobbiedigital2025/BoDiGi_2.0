@@ -161,7 +161,7 @@ RULES:
 - Keep each file under 50 lines — compact, no unnecessary comments, no TODO placeholders. If something can't be completed, simplify the route rather than leaving a TODO.
 - TypeScript strict: no any types unless truly unavoidable.
 
-Respond ONLY in valid JSON: {"files":[{"path":"src/app/api/...","content":"...","agent":"backend","status":"generated"}]}`;
+Respond ONLY in valid JSON: {"files":[{"path":"app/api/...","content":"...","agent":"backend","status":"generated"}]}`;
 
 export function generateDefaultBackendFiles(input: BackendAgentInput): BackendAgentOutput {
   // Architecture API endpoints inform the routes (used when AI is wired in)
@@ -310,10 +310,10 @@ export async function POST(request: NextRequest) {
 
   return {
     files: [
-      { path: 'src/app/api/auth/signup/route.ts', content: authSignup, agent: 'backend', status: 'generated' },
-      { path: 'src/app/api/auth/login/route.ts', content: authLogin, agent: 'backend', status: 'generated' },
-      { path: 'src/app/api/projects/route.ts', content: projectsList, agent: 'backend', status: 'generated' },
-      { path: 'src/app/api/billing/webhook/route.ts', content: billingWebhook, agent: 'backend', status: 'generated' },
+      { path: 'app/api/auth/signup/route.ts', content: authSignup, agent: 'backend', status: 'generated' },
+      { path: 'app/api/auth/login/route.ts', content: authLogin, agent: 'backend', status: 'generated' },
+      { path: 'app/api/projects/route.ts', content: projectsList, agent: 'backend', status: 'generated' },
+      { path: 'app/api/billing/webhook/route.ts', content: billingWebhook, agent: 'backend', status: 'generated' },
     ],
   };
 }
@@ -345,17 +345,17 @@ RULES:
 - TypeScript strict, 'use client' where needed, proper imports.
 
 CORRECTNESS CONTRACT (violations break the user's Vercel build — a build failure is a product failure):
-1. CLOSED WORLD: You may ONLY import from (a) npm packages in package.json, (b) 'next/*' and 'react' modules, (c) files YOU are writing in this exact output. NEVER import from '@/components/...' or any path unless a file at that path is in your files list. If a page needs a TaskCard, you must also write src/components/TaskCard.tsx.
+1. CLOSED WORLD: You may ONLY import from (a) npm packages in package.json, (b) 'next/*' and 'react' modules, (c) files YOU are writing in this exact output. NEVER import from '@/components/...' or any path unless a file at that path is in your files list. If a page needs a TaskCard, you must also write components/TaskCard.tsx (project root — NEVER create a src/ directory).
 2. EXPORTS MATCH IMPORTS: If you write \`import { X } from './y'\`, then y must \`export function X\` or \`export const X\`. Named vs default is a choice — but it must match on both sides.
 3. EVERY USED NAME IS IMPORTED: useState/useEffect/etc. must appear in an import from 'react'. next/navigation APIs (useRouter, redirect) must be imported. tsc rejects free-floating names.
 4. 'use client' FIRST LINE of any file using hooks, event handlers, localStorage, or browser APIs. It must be the literal first line, before imports.
-5. PATH ALIAS: '@/*' maps to './src/*'. '@/components/X' means the file src/components/X.tsx must exist in your output. Never mix 'app/' and 'src/app/' roots — everything under src/.
+5. PATH ALIAS: '@/*' maps to './*' (project root). '@/components/X' means the file components/X.tsx must exist in your output. The app router lives at ROOT app/ — NEVER create src/ or src/app/. Every file you write lives at project root: app/, components/, lib/.
 6. EVENT HANDLERS: never assign null to onClick/onChange — use undefined or omit.
-7. REQUIRED FILES: your output must include src/app/layout.tsx (root layout) and src/app/page.tsx (root page, even if it just redirects to the main view). A Next app without them does not build.
+7. REQUIRED FILES: your output must include app/layout.tsx (root layout) and app/page.tsx (root page, even if it just redirects to the main view). A Next app without them does not build.
 8. TYPES: no implicit any — type every function parameter and every useState that will hold non-trivial data (useState<Item[]>([]), not useState([])).
 Before responding, mentally run tsc over your own output: for each file, check every import resolves and every referenced component exists in your files list. Fix discrepancies before you answer.
 
-Respond ONLY in valid JSON: {"files":[{"path":"src/app/.../page.tsx","content":"...","agent":"frontend","status":"generated"}]}`;
+Respond ONLY in valid JSON: {"files":[{"path":"app/.../page.tsx","content":"...","agent":"frontend","status":"generated"}]}`;
 
 export function generateDefaultFrontendFiles(input: FrontendAgentInput): FrontendAgentOutput {
   const loginPage = `'use client';
@@ -657,9 +657,9 @@ export default function AdminPage() {
 
   return {
     files: [
-      { path: 'src/app/(auth)/login/page.tsx', content: loginPage, agent: 'frontend', status: 'generated' },
-      { path: 'src/app/(auth)/signup/page.tsx', content: signupPage, agent: 'frontend', status: 'generated' },
-      { path: 'src/app/(dashboard)/admin/page.tsx', content: adminPage, agent: 'frontend', status: 'generated' },
+      { path: 'app/(auth)/login/page.tsx', content: loginPage, agent: 'frontend', status: 'generated' },
+      { path: 'app/(auth)/signup/page.tsx', content: signupPage, agent: 'frontend', status: 'generated' },
+      { path: 'app/(dashboard)/admin/page.tsx', content: adminPage, agent: 'frontend', status: 'generated' },
     ],
   };
 }
