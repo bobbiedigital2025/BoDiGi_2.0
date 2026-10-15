@@ -629,6 +629,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     this.state = { ...persisted, tasks };
     this.taskQueue = [...tasks];
     this.activeTasks.clear();
+    // Rebuild the completed-task registry from persisted statuses. It feeds
+    // dependency resolution AND progress accounting — without this a resumed
+    // window sees only its own completions, so the final window's count is
+    // what gets saved (a finished 9-task build whose last window ran 2 tasks
+    // reads 22% forever) and cross-window dependencies look unmet.
+    this.completedTasks.clear();
+    for (const t of tasks) {
+      if (t.status === 'completed') this.completedTasks.set(t.id, t);
+    }
     this.updateState();
   }
 
@@ -648,7 +657,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   getProgress(): number {
     const total = this.state.tasks.length;
     if (total === 0) return 0;
-    const completed = this.completedTasks.size;
+    // Count from task statuses (the persisted source of truth), not the
+    // in-memory completedTasks registry — statuses survive relay handoffs.
+    const completed = this.state.tasks.filter((t) => t.status === 'completed').length;
     return Math.round((completed / total) * 100);
   }
 
