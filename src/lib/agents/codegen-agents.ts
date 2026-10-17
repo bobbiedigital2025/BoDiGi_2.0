@@ -762,7 +762,14 @@ export async function runBackendAgent(
   log: LogFn
 ): Promise<BackendAgentOutput> {
   // Primary path: persistent Letta agent (learns across projects)
-  if (hasLettaKey()) {
+  // DISABLED Oct 17 (KDP-build incident): the persistent Letta backend agent
+  // attempt has never completed inside its 120s timeout on any recorded build
+  // — it burns 2 minutes of the 300s Vercel window per stage, starving the
+  // OpenRouter fallback below. Skipping straight to OpenRouter gives codegen
+  // the full-window budget (see ai-client.ts budgetForRole). Re-enable with
+  // LETTA_CODEGEN_ENABLED=true once codegen moves to chunked multi-call
+  // generation (Juno's pipeline seam).
+  if (process.env.LETTA_CODEGEN_ENABLED === 'true' && hasLettaKey()) {
     try {
       const raw = await callLettaAgent('backend', await withLearnedRules('backend', buildBackendPrompt(input)));
       const result = { files: extractFiles(raw, 'backend') };
@@ -809,7 +816,10 @@ export async function runFrontendAgent(
   log: LogFn
 ): Promise<FrontendAgentOutput> {
   // Primary path: persistent Letta agent (learns across projects)
-  if (hasLettaKey()) {
+  // DISABLED Oct 17 — see the matching note in runBackendAgent above.
+  // Re-enable with LETTA_CODEGEN_ENABLED=true after the chunked-generation
+  // redesign.
+  if (process.env.LETTA_CODEGEN_ENABLED === 'true' && hasLettaKey()) {
     try {
       const raw = await callLettaAgent('frontend', await withLearnedRules('frontend', buildFrontendPrompt(input)));
       const result = { files: extractFiles(raw, 'frontend') };

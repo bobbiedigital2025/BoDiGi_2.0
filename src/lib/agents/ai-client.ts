@@ -33,6 +33,26 @@ const TELNYX_MODEL = 'MiniMaxAI/MiniMax-M3-MXFP8';
 const CODEGEN_MODEL = 'anthropic/claude-sonnet-5.5';
 const CODEGEN_ROLES = new Set(['database', 'backend', 'frontend']);
 
+/**
+ * Role-aware call budgets (Oct 17 KDP-build incident).
+ *
+ * Codegen stages (database/backend/frontend) emit whole-stage JSON file
+ * manifests — 40–100KB. With the old flat budget (90s / max_tokens 8192),
+ * Sonnet's thinking spent most of the token budget and the response JSON
+ * came back truncated or empty, silently degrading big builds to template
+ * fallbacks ("AI returned an empty response" / JSON parse errors).
+ *
+ * Codegen gets the near-full Vercel window (270s of the 300s maxDuration)
+ * and a 32K-token budget. Lightweight calls (docs, summaries, marketing)
+ * keep the small/fast budget so they never hog a window.
+ */
+function budgetForRole(role?: string): { timeoutMs: number; maxTokens: number } {
+  if (role && CODEGEN_ROLES.has(role)) {
+    return { timeoutMs: 270_000, maxTokens: 32_768 };
+  }
+  return { timeoutMs: 90_000, maxTokens: 8_192 };
+}
+
 /** Approximate per-token dollar cost by model, for usage analytics. */
 const MODEL_PRICE: Record<string, { input: number; output: number }> = {
   'openai/gpt-4o-mini': { input: 0.00000015, output: 0.0000006 },
@@ -88,8 +108,9 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
       ? CODEGEN_MODEL
       : provider.model);
 
+  const budget = budgetForRole(role);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90000); // 90s max per call
+  const timeout = setTimeout(() => controller.abort(), budget.timeoutMs);
 
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${provider.key}`,
@@ -112,7 +133,7 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.7,
-      max_tokens: 8192,
+      max_tokens: budget.maxTokens,
     }),
   }).finally(() => clearTimeout(timeout));
 
