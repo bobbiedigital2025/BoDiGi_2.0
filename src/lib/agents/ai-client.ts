@@ -134,15 +134,6 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
       ],
       temperature: 0.7,
       max_tokens: budget.maxTokens,
-      // Credit optimization (Oct 17): disable extended reasoning on
-      // OpenRouter. Reasoning tokens are billed as output tokens and were
-      // part of the codegen starvation bug (thinking spent the budget, the
-      // code JSON came back empty/truncated). Disabling it makes the output
-      // budget fully deterministic AND cheaper per build. Sonnet 5.5 without
-      // extended thinking is still top-tier codegen — the prompts already
-      // carry 200+ distilled build lessons. Safely ignored by models without
-      // reasoning support; never sent to Telnyx.
-      ...(provider.label === 'OpenRouter' ? { reasoning: { enabled: false } } : {}),
     }),
   }).finally(() => clearTimeout(timeout));
 
