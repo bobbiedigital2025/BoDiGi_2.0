@@ -33,6 +33,14 @@ export interface PreflightReport {
   addedDeps: string[];
   bridgedFiles: string[];
   warnings: string[];
+  secretFindings: SecretFinding[];
+}
+
+/** One hardcoded-credential hit. Never stores the secret itself. */
+export interface SecretFinding {
+  path: string;
+  pattern: string; // human label, e.g. 'stripe-live-secret-key'
+  preview: string; // first 4 chars + '…' — never the full value
 }
 
 const IMPORT_RE = /import\s+(?:type\s+)?[^;'"\n]+?\s+from\s+['"]([^'"]+)['"]/g;
@@ -75,6 +83,33 @@ const KNOWN_VERSIONS: Record<string, string> = {
 };
 
 const RADIX_PREFIX = '@radix-ui/';
+
+/**
+ * Secret-scan (#14 kernel, Oct 24 2026): generated code and exports are
+ * scanned for hardcoded credentials before delivery — the same
+ * deterministic family as dependency reconciliation and stub bridging.
+ *
+ * v1 is LOG-ONLY: findings go to the report and the preflight log lines;
+ * delivery is not blocked until the false-positive rate is proven low in
+ * production. Blocking arms as v2.
+ *
+ * Findings never contain the secret itself — pattern class + file path +
+ * a 4-char redacted preview only (logs are customer-visible; keys never
+ * reach logs or users).
+ */
+const SECRET_PATTERNS: Array<{ label: string; re: RegExp }> = [
+  { label: 'stripe-live-secret-key', re: /sk_live_[0-9a-zA-Z]{16,}/g },
+  { label: 'stripe-test-secret-key', re: /sk_test_[0-9a-zA-Z]{16,}/g },
+  { label: 'stripe-restricted-key', re: /rk_(?:live|test)_[0-9a-zA-Z]{16,}/g },
+  { label: 'stripe-webhook-secret', re: /whsec_[0-9a-zA-Z]{16,}/g },
+  { label: 'openrouter-api-key', re: /sk-or-v1-[0-9a-zA-Z-]{16,}/g },
+  { label: 'supabase-secret-key', re: /sb_secret_[0-9a-zA-Z-]{16,}/g },
+  { label: 'db-connection-string-with-password', re: /postgres(?:ql)?:\/\/[^\s'"`]*:[^\s'"`@]+@/g },
+  { label: 'generic-key-literal', re: /\b[A-Z_]*(?:API_KEY|SECRET_KEY|ACCESS_TOKEN|PRIVATE_KEY|SERVICE_ROLE)[A-Z_]*\s*[:=]\s*['"][0-9A-Za-z+/_-]{32,}['"]/g },
+];
+
+/** Obvious placeholders a scan must not flag. */
+const SECRET_PLACEHOLDER_RE = /(?:YOUR_|CHANGE ?ME|PLACEHOLDER|EXAMPLE|DUMMY|<[^>]*>|\bxxx\b)/i;
 
 function collectSpecifiers(content: string, out: Set<string>): void {
   for (const re of [IMPORT_RE, SIDE_EFFECT_RE, REEXPORT_RE, DYNAMIC_RE, REQUIRE_RE]) {
@@ -247,10 +282,40 @@ export function bridgeLocalModules(files: PreflightFile[], report: PreflightRepo
 
 /** Run all preflight checks in place; returns the plain-English report. */
 export function runPreflight(files: PreflightFile[]): PreflightReport {
-  const report: PreflightReport = { addedDeps: [], bridgedFiles: [], warnings: [] };
+  const report: PreflightReport = { addedDeps: [], bridgedFiles: [], warnings: [], secretFindings: [] };
+  scanSecrets(files, report);
   bridgeLocalModules(files, report, detectAliasRoot(files));
   reconcileDependencies(files, report);
   return report;
+}
+
+/**
+ * Scan code and env-style files for hardcoded credentials. Specific
+ * patterns run first; a generic-literal hit that overlaps a specific one
+ * is skipped so each secret is reported once, under its strongest label.
+ */
+export function scanSecrets(files: PreflightFile[], report: PreflightReport): void {
+  for (const f of files) {
+    if (!f.content) continue;
+    const scannable = CODE_EXT_RE.test(f.path) || /(^|\/)\.env/.test(f.path);
+    if (!scannable) continue;
+    const hits: Array<[number, number]> = [];
+    for (const { label, re } of SECRET_PATTERNS) {
+      re.lastIndex = 0;
+      for (let m = re.exec(f.content); m !== null; m = re.exec(f.content)) {
+        const start = m.index;
+        const end = start + m[0].length;
+        if (hits.some(([s, e]) => start < e && end > s)) continue;
+        const context = f.content.slice(Math.max(0, start - 60), end);
+        if (SECRET_PLACEHOLDER_RE.test(context)) continue;
+        hits.push([start, end]);
+        report.secretFindings.push({ path: f.path, pattern: label, preview: m[0].slice(0, 4) + '…' });
+      }
+    }
+  }
+  if (report.secretFindings.length > 0) {
+    report.warnings.push(`Found ${report.secretFindings.length} hardcoded secret pattern(s) — see secret findings.`);
+  }
 }
 
 /** Plain-English lines for project_logs — the customer watches the fix happen. */
@@ -261,6 +326,10 @@ export function preflightLogLines(report: PreflightReport): string[] {
   }
   if (report.bridgedFiles.length > 0) {
     lines.push(`Preflight: placed ${report.bridgedFiles.length} file(s) where the compiler looks for them (${report.bridgedFiles.slice(0, 4).join(', ')}${report.bridgedFiles.length > 4 ? ', …' : ''}).`);
+  }
+  if (report.secretFindings.length > 0) {
+    const shown = report.secretFindings.slice(0, 3).map((s) => `${s.pattern} in ${s.path}`).join('; ');
+    lines.push(`Preflight: found ${report.secretFindings.length} hardcoded secret pattern(s) (${shown}${report.secretFindings.length > 3 ? ', …' : ''}) — flagged for review. Real keys belong in environment variables, never in code.`);
   }
   if (lines.length === 0 && report.warnings.length === 0) {
     lines.push('Preflight: all imports and packages check out.');
