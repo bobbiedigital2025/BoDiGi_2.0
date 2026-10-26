@@ -65,3 +65,40 @@ CREATE POLICY concepts_admin_read ON concepts
 -- resume relay both probe this cheaply.
 CREATE INDEX IF NOT EXISTS projects_status_cancelled_idx
   ON projects (status) WHERE status = 'cancelled';
+
+-- ============================================================================
+-- SECURITY AUDIT LOGS — the CTO seat's append-only verdict trail
+-- (spec v1, RUNE-reviewed Oct 25; folded into 018 so Bobbie's Monday paste
+--  stays ONE file — changeset owner's call)
+--
+-- Posture: dead twice over for non-service callers —
+--   RLS enabled with ZERO policies (no row is selectable via role-based
+--   paths) + explicit REVOKE from anon/authenticated.
+--   service_role: SELECT + INSERT only — an audit trail is append-only;
+--   UPDATE/DELETE revoked so verdicts cannot be rewritten after the fact.
+-- No FK on project_id by design: audit evidence outlives the artifact —
+-- a deleted project's findings must survive.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.security_audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  project_id TEXT,
+  audited_by TEXT NOT NULL,
+  audit_kind TEXT NOT NULL,
+  verdict TEXT NOT NULL CHECK (verdict IN ('clean', 'flagged', 'quarantined')),
+  rubric_version TEXT,
+  scanner_version TEXT,
+  findings JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+  notes TEXT
+);
+
+ALTER TABLE public.security_audit_logs ENABLE ROW LEVEL SECURITY;  -- intentionally NO policies
+REVOKE ALL ON public.security_audit_logs FROM anon, authenticated;
+REVOKE UPDATE, DELETE ON public.security_audit_logs FROM service_role;
+GRANT SELECT, INSERT ON public.security_audit_logs TO service_role;
+
+CREATE INDEX IF NOT EXISTS idx_sal_project_id ON public.security_audit_logs (project_id);
+CREATE INDEX IF NOT EXISTS idx_sal_created_at ON public.security_audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sal_verdict ON public.security_audit_logs (verdict);
