@@ -128,7 +128,7 @@ export async function sendWelcomeEmail(to: string, name?: string) {
       <h2 style="color:#fff;font-size:18px;">${greeting}, you're in. ⚡</h2>
       <p style="color:#a3a3a3;font-size:14px;line-height:1.6;">
         You bring the idea. We build the business. Describe your app in one sentence
-        and nine specialized AI agents will spec it, architect it, write the code,
+        and eleven specialized AI agents will spec it, architect it, write the code,
         test it, and hand you a live preview — plus an investor one-pager, an honest
         reality check, and a step-by-step launch guide.
       </p>

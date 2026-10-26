@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 const SITE_URL = "https://bodigi2.com";
 const TITLE = "BoDiGi 2.0 — AI Builds Your App AND Your Business Plan";
 const DESCRIPTION =
-  "Describe your idea in one sentence. Nine AI agents build your full app — frontend, backend, tests, docs — plus an investor pitch, honest reality check, and marketing kit. Deploys to YOUR Vercel. Your code, your keys, no lock-in.";
+  "Describe your idea in one sentence. An 11-agent AI build team builds your full app — frontend, backend, tests, docs — plus an investor pitch, honest reality check, and marketing kit. Deploys to YOUR Vercel. Your code, your keys, no lock-in.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -100,7 +100,7 @@ const jsonLd = {
           name: "What is BoDiGi 2.0?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "BoDiGi 2.0 is an AI app factory: describe your idea in one sentence and nine specialized AI agents build a complete, working application — frontend, backend, database, tests, compliance checks, and documentation — plus an investor one-pager, an honest reality-check report, and a 30-day marketing kit.",
+            text: "BoDiGi 2.0 is an AI app factory: describe your idea in one sentence and eleven specialized AI agents build a complete, working application — frontend, backend, database, tests, compliance checks, and documentation — plus an investor one-pager, an honest reality-check report, and a 30-day marketing kit.",
           },
         },
         {
@@ -124,7 +124,7 @@ const jsonLd = {
           name: "What does BoDiGi cost?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Free tier: build a real app with a 7-day live preview, no card required. Starter ($19/mo): export your code and keep previews 30 days. Pro ($49/mo): unlimited apps, one-click deploy to your own Vercel, AI chat-to-edit, and the full marketing kit. Enterprise ($199/mo): everything unlimited plus phone support.",
+            text: "Free tier: build a real app with a 7-day live preview, no card required. Starter ($19.99/mo): export your code and keep previews 30 days. Pro ($49.99/mo): unlimited apps, one-click deploy to your own Vercel, AI chat-to-edit, and the full marketing kit. Enterprise ($199/mo): everything unlimited plus phone support.",
           },
         },
         {

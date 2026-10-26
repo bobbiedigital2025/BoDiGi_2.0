@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 const faqs = [
   {
     q: 'What is BoDiGi 2.0?',
-    a: 'BoDiGi 2.0 is an AI app factory: describe your idea in one sentence and nine specialized AI agents build a complete, working application — frontend, backend, database, tests, compliance checks, and documentation — plus an investor one-pager, an honest reality-check report, and a 30-day marketing kit.',
+    a: 'BoDiGi 2.0 is an AI app factory: describe your idea in one sentence and eleven specialized AI agents build a complete, working application — frontend, backend, database, tests, compliance checks, and documentation — plus an investor one-pager, an honest reality-check report, and a 30-day marketing kit.',
   },
   {
     q: 'How is BoDiGi different from Lovable, Bolt, or Base44?',
