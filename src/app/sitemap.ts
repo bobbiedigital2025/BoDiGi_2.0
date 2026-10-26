@@ -12,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE}/setup`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/training`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE}/faq`, lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
+    { url: `${BASE}/ai-app-builder-for-cleaning-businesses`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${BASE}/terms`, lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
     { url: `${BASE}/privacy`, lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
   ];
