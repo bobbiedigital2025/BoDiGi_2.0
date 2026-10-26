@@ -116,7 +116,10 @@ export async function classifyContent(text: string, userId?: string): Promise<Cl
     return { verdict: 'clean', reason: 'Classifier unavailable — passed through (logged for audit).' };
   }
   try {
-    const response = await callAI(CLASSIFIER_SYSTEM_PROMPT, `App idea to classify:\n\n${text}`, 'database');
+    // 'planning' = non-codegen role → cheap default model (mini). This is a
+    // one-JSON-verdict text task; Sonnet here would be pure pre-revenue burn
+    // (RUNE review flag, Oct 25). Same for card drafting/iteration below.
+    const response = await callAI(CLASSIFIER_SYSTEM_PROMPT, `App idea to classify:\n\n${text}`, 'planning');
     const parsed = extractJSON(response);
     const verdict = parsed?.verdict;
     if (verdict === 'clean' || verdict === 'borderline' || verdict === 'blocked') {
@@ -193,7 +196,7 @@ export function fallbackCard(idea: string): ConceptCard {
 export async function draftConceptCard(idea: string): Promise<ConceptCard> {
   if (!hasAIKey()) return fallbackCard(idea);
   try {
-    const response = await callAI(CARD_SYSTEM_PROMPT, `Founder's idea (may be a structured interview brief):\n\n${idea}`, 'database');
+    const response = await callAI(CARD_SYSTEM_PROMPT, `Founder's idea (may be a structured interview brief):\n\n${idea}`, 'planning');
     const parsed = extractJSON(response);
     if (!parsed || typeof parsed.name !== 'string' || typeof parsed.pitch !== 'string') {
       console.error('[concept-gate] card draft unparseable — using fallback card');
@@ -225,7 +228,7 @@ export async function iterateConceptCard(idea: string, previousCard: ConceptCard
   }
   try {
     const userPrompt = `Founder's original idea:\n${idea}\n\nPrevious card (carry forward everything the feedback does not change):\n${JSON.stringify(previousCard, null, 2)}\n\nFounder's feedback:\n${feedback}`;
-    const response = await callAI(ITERATE_SYSTEM_PROMPT, userPrompt, 'database');
+    const response = await callAI(ITERATE_SYSTEM_PROMPT, userPrompt, 'planning');
     const parsed = extractJSON(response);
     if (!parsed || typeof parsed.name !== 'string' || typeof parsed.pitch !== 'string') {
       console.error('[concept-gate] iteration draft unparseable — keeping previous card with feedback note');
@@ -261,7 +264,8 @@ export function buildBriefFromCard(card: ConceptCard, sourceIdea: string): strin
     `Design vibe: ${card.look}`,
     `Screens in scope: ${card.screens.join(' | ')}`,
     `Explicitly NOT building: ${card.notBuilding.join(', ')} — do not include these`,
-    `Approved concept (version locked by the founder). Original idea/brief:`,
+    `Approved concept (version locked by the founder) — the card above is the spec.`,
+    `Original idea/interview brief (CONTEXT ONLY — where it disagrees with the card, the card wins; the NOT-building list is final):`,
     sourceIdea,
   ].join('\n');
 }
