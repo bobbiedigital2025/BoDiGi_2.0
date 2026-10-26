@@ -26,6 +26,7 @@ import { checkModifyQuota, checkAppAiQuota } from '@/lib/quota';
 import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
 import { callAI, hasAIKey, setUsageContext } from '@/lib/agents/ai-client';
+import { classifyContent } from '@/lib/agents/concept-gate';
 import { learnFromModification } from '@/lib/agents/build-memory';
 import type { GeneratedFile } from '@/lib/agents/types';
 
@@ -114,6 +115,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   if (instruction.length > 2000) {
     return NextResponse.json({ error: 'Keep it under 2000 characters — one change at a time works best.' }, { status: 400 });
+  }
+
+  // ── CLASSIFIER WELD (Concept Gate changeset, Oct 22 lock) ──
+  // The modify pass is not gate-gated (the founder already approved the
+  // concept), but content classification rides the same seam: a change
+  // request can smuggle content the concept never had. Blocked → refuse.
+  // Borderline → refuse + log for admin review (modify has no concept row
+  // to flag; the refusal is the review trigger).
+  const classification = await classifyContent(instruction, user.id);
+  if (classification.verdict === 'blocked') {
+    return NextResponse.json(
+      { error: "We can't make that change — it doesn't meet our content rules." },
+      { status: 403 }
+    );
+  }
+  if (classification.verdict === 'borderline') {
+    console.error(`[modify] BORDERLINE change request on ${projectId} by ${user.id} — refused, admin review: ${classification.reason}`);
+    return NextResponse.json(
+      { error: 'This change needs a quick human review before we can make it — support@bobbie.digital can help.' },
+      { status: 403 }
+    );
   }
 
   // 3. Load project files + ownership. Ownership ALWAYS verified via the

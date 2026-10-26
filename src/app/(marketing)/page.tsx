@@ -63,18 +63,23 @@ export default function LandingPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/generate', {
+      // CONCEPT APPROVAL GATE: the idea now goes to a Concept Card first —
+      // the founder approves the concept before the build burns.
+      const res = await fetch('/api/concept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea: finalIdea }),
+        body: JSON.stringify({
+          idea: finalIdea,
+          source: pendingBrief.current ? 'interview' : 'idea',
+        }),
       });
       if (res.status === 401) {
         router.push('/login?redirect=/');
         return;
       }
       const data = await res.json();
-      if (data.projectId) {
-        router.push(`/dashboard/${data.projectId}`);
+      if (data.conceptId) {
+        router.push(`/dashboard/concept/${data.conceptId}`);
       } else {
         setError(data.error || 'The build team could not start right now. Please try again in a moment.');
         setLoading(false);

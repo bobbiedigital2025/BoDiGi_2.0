@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { createProject, listProjectsForUser, getPipelineRun } from '@/lib/agents/pipeline';
 import { sweepStaleBuilds } from '@/lib/agents/stale-builds';
+import { buildBriefFromCard, type ConceptCard } from '@/lib/agents/concept-gate';
 import { createServerClient } from '@/lib/supabase/server-client';
 import { rateLimit, getClientId, RATE_LIMITS } from '@/lib/rate-limit';
 import { checkBuildQuota } from '@/lib/quota';
@@ -54,20 +55,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── CONCEPT APPROVAL GATE (Oct 22 lock) ────────────────────────────────
+    // This route used to take a raw idea and burn a build silently. Now it
+    // is server-enforced: a build only fires from an APPROVED concept card.
+    // Admins may bypass for verification builds (audit-logged path).
     const body = await request.json();
-    const idea: string = body.idea;
+    const conceptId: string | undefined = body.conceptId;
 
-    if (!idea || typeof idea !== 'string' || idea.trim().length < 10) {
-      return NextResponse.json(
-        { error: 'Please provide a more detailed app idea (at least 10 characters)' },
-        { status: 400 }
-      );
+    let idea: string;
+
+    if (conceptId && typeof conceptId === 'string') {
+      const { data: concept, error: conceptError } = await supabase
+        .from('concepts')
+        .select('id, user_id, status, card, source_idea, project_id')
+        .eq('id', conceptId)
+        .maybeSingle();
+
+      if (conceptError || !concept || concept.user_id !== user.id) {
+        return NextResponse.json({ error: 'Concept not found' }, { status: 404 });
+      }
+
+      // Idempotent: an approved concept that already launched hands back its project
+      if (concept.status === 'building' && concept.project_id) {
+        return NextResponse.json({
+          projectId: concept.project_id,
+          message: 'Build already running',
+        });
+      }
+
+      if (concept.status !== 'approved') {
+        return NextResponse.json(
+          {
+            error:
+              concept.status === 'presented' || concept.status === 'iterating'
+                ? 'Approve the concept card first — then the build fires.'
+                : `This concept is ${concept.status} and cannot start a build.`,
+            conceptFlow: true,
+          },
+          { status: 403 }
+        );
+      }
+
+      // Build from the APPROVED CARD SNAPSHOT, not the raw idea
+      idea = buildBriefFromCard(concept.card as ConceptCard, concept.source_idea);
+    } else {
+      // No conceptId: admin bypass only (verification builds, audit path)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profile?.role !== 'admin') {
+        return NextResponse.json(
+          {
+            error: 'Every build starts with a concept card now — tell us your idea and approve the concept first.',
+            conceptFlow: true,
+          },
+          { status: 403 }
+        );
+      }
+
+      const rawIdea: string = body.idea;
+      if (!rawIdea || typeof rawIdea !== 'string' || rawIdea.trim().length < 10) {
+        return NextResponse.json(
+          { error: 'Please provide a more detailed app idea (at least 10 characters)' },
+          { status: 400 }
+        );
+      }
+      idea = rawIdea.trim().slice(0, 2000).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
     }
 
-    // Sanitize: cap length, strip control characters
-    const sanitized = idea.trim().slice(0, 2000).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    // (idea is now either an approved-card brief or an admin-bypass idea —
+    //  both sanitized at their origin; card content was sanitized at draft time)
 
-    const projectId = createProject(sanitized, user.id);
+    const projectId = createProject(idea, user.id);
 
     // Keep this function instance alive until the pipeline settles.
     // Fire-and-forget without waitUntil is what let Vercel freeze builds

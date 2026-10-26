@@ -152,6 +152,7 @@ const PHASES = [
 const PROJECT_STATUS_LABELS: Record<string, string> = {
   done: 'Built',
   failed: 'Failed',
+  cancelled: 'Cancelled',
   planning: 'Planning',
   building: 'Building',
   testing: 'Testing',
@@ -162,6 +163,7 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
   const { projectId } = use(params);
   const router = useRouter();
   const [data, setData] = useState<ProjectData | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'pipeline' | 'preview'>('pipeline');
   const [setupAgentOpen, setSetupAgentOpen] = useState(false);
@@ -193,6 +195,24 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
   // troubleshooting mode for these. Missing deploymentUrl is NOT an issue —
   // apps are hosted previews inside BoDiGi 2.0, not external deployments.
   const buildHadFailures = data?.state?.tasks?.some(t => t.status === 'failed') ?? false;
+
+  // ── CANCEL SWITCH (Concept Gate changeset) — actually bites now ──
+  const cancelBuild = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/generate/${projectId}/cancel`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error('cancel failed:', body.error);
+      }
+    } catch {
+      console.error('cancel request failed');
+    } finally {
+      // Reload either way — the status is the truth, whatever it now is
+      window.location.reload();
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -336,6 +356,19 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
           <Badge variant={state.status === 'done' ? 'success' : state.status === 'failed' ? 'error' : 'info'}>
             {PROJECT_STATUS_LABELS[state.status] || state.status}
           </Badge>
+          {['planning', 'building', 'testing', 'deploying'].includes(state.status) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cancelBuild}
+              disabled={cancelling}
+              className="border-red-500/30 text-red-300 hover:text-red-200 hover:border-red-500/50"
+              title="Stop this build — completed work is saved"
+            >
+              {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4 sm:mr-2" />}
+              <span className="hidden sm:inline">Cancel build</span>
+            </Button>
+          )}
           <span className="hidden sm:inline text-sm text-white/60">{progress}% complete</span>
         </div>
       </header>
