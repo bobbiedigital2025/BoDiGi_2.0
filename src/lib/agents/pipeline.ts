@@ -50,6 +50,7 @@ import { markBuildFailed } from './stale-builds';
 import type { ProjectState, GeneratedFile, AgentRole } from './types';
 import { hasSupabase } from '../supabase/server';
 import { saveProject, loadProjectFromSupabase, listUserProjects } from '../supabase/project-store';
+import { isCancelledLocally, isProjectCancelled } from './cancel-switch';
 
 // In-memory project store (shared with API routes)
 // Still needed for active pipeline runs; completed projects persist to Supabase
@@ -159,6 +160,22 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
 
     for (const task of tasks) {
       if (task.status === 'completed' || task.status === 'failed' || task.status === 'retrying') continue;
+
+      // ── CANCEL SWITCH (Concept Gate changeset, Oct 22 lock) ──
+      // Check at every task boundary — the only place a cancel can safely
+      // bite (never mid-agent-call). The Oct 22 incident: a cancelled
+      // build's relay completed underneath and overwrote the kill. This
+      // check, plus the DB flip the cancel route makes, plus the resume
+      // gate refusing non-active statuses, closes all three seams.
+      if (isCancelledLocally(projectId) || await isProjectCancelled(projectId)) {
+        orchestrator.log('devops', 'info',
+          `Build cancelled by the founder — halting before "${task.title}". Partial work is saved; nothing further runs.`);
+        if (userId && hasSupabase()) {
+          await saveProject(userId, projectId, orchestrator.getState(), project.files, orchestrator.getProgress())
+            .catch(() => undefined);
+        }
+        return;
+      }
 
       // Vercel kills this function at 300s. Only start this task if it can
       // plausibly finish inside the remaining window — otherwise save and
@@ -488,6 +505,13 @@ Rules: rate limits and timeouts ARE retriable (retry with backoff). AI parse err
   const finalState = orchestrator.getState();
   project.state = finalState;
   store.set(projectId, project);
+
+  // ── CANCEL SWITCH: never save a "completed" over a founder's cancel ──
+  if (await isProjectCancelled(projectId)) {
+    orchestrator.log('devops', 'info',
+      'Build was cancelled while the final phase ran — keeping the cancelled status, not overwriting it.');
+    return;
+  }
 
   // Persist final state to Supabase
   if (userId && hasSupabase()) {

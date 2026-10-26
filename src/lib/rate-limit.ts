@@ -81,6 +81,10 @@ export function getClientId(request: Request, userId?: string): string {
 export const RATE_LIMITS = {
   /** Pipeline generation — expensive AI calls */
   generate: { limit: 5, windowSeconds: 3600 },       // 5/hour
+  /** Concept card drafting — one AI call per card (gate entry) */
+  concept: { limit: 10, windowSeconds: 3600 },      // 10/hour
+  /** Concept iterations — cheap AI calls, founders iterate freely */
+  conceptIterate: { limit: 30, windowSeconds: 3600 }, // 30/hour
   /** Setup agent chat — moderate AI calls */
   setupAgent: { limit: 30, windowSeconds: 3600 },    // 30/hour
   /** Key storage writes */
