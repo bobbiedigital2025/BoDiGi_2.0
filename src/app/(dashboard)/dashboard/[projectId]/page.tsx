@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -167,6 +167,15 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'pipeline' | 'preview'>('pipeline');
+  // Stall detection (#15 kernel, Oct 26): a build that hasn't moved in 3+
+  // minutes gets a guidance card — reassurance + agency, not silence. The
+  // customer can't tell "agent thinking hard" from "build died"; this
+  // tells them where it stands and hands them the exit if they want it.
+  const [stalled, setStalled] = useState(false);
+  const [stallDismissed, setStallDismissed] = useState(false);
+  // `at: 0` = no movement recorded yet; the first poll stamps it. (Never
+  // call Date.now() in the initializer — impure during render, lint gate.)
+  const lastMovementRef = useRef({ sig: '', at: 0 });
   const [setupAgentOpen, setSetupAgentOpen] = useState(false);
   const [brandBusy, setBrandBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -226,6 +235,13 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
         if (active) {
           setData(json);
           setError(null);
+          // Movement signature: progress, phase, task statuses, log count.
+          // Any change = the build is alive. Unchanged = counting toward stall.
+          const sig = `${json.progress}|${json.state?.status}|${json.state?.currentPhase ?? 0}|${(json.state?.tasks ?? []).map((t: { status: string }) => t.status).join(',')}|${json.logs?.length ?? 0}`;
+          if (sig !== lastMovementRef.current.sig) {
+            lastMovementRef.current = { sig, at: Date.now() };
+            setStallDismissed(false); // movement resumed — re-arm for the next stall
+          }
         }
       } catch (e) {
         if (active) setError(e instanceof Error ? e.message : 'Failed to load project');
@@ -239,6 +255,17 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
       clearInterval(interval);
     };
   }, [projectId]);
+
+  // Stall check: every 15s, is the build active AND silent for 3+ minutes?
+  // The card is guidance, not a failure verdict — long agent steps are
+  // normal, and the card's language covers both cases.
+  useEffect(() => {
+    const t = setInterval(() => {
+      const activeStatus = ['planning', 'building', 'testing', 'deploying'].includes(data?.state?.status ?? '');
+      setStalled(activeStatus && lastMovementRef.current.at > 0 && Date.now() - lastMovementRef.current.at > 180_000);
+    }, 15000);
+    return () => clearInterval(t);
+  }, [data?.state?.status]);
 
   // Hook order must be stable across renders — calling hooks below the
   // early returns crashes with React #310 ("rendered more hooks") as soon
@@ -428,6 +455,38 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
             ))}
           </div>
         </div>
+
+        {/* Stall guidance card (#15 kernel) — appears when the build has
+            been quiet for 3+ minutes while still active */}
+        {stalled && !stallDismissed && ['planning', 'building', 'testing', 'deploying'].includes(state.status) && (
+          <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-amber-200">This step is taking longer than usual</p>
+                <p className="text-sm text-white/60 mt-1">
+                  Long steps happen — an agent may be thinking through a complex part of your app.
+                  Everything finished so far is saved. Most builds come back on their own; if you'd
+                  rather not wait, you can stop here and keep what's built.
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => setStallDismissed(true)}
+                  className="text-xs px-3 py-1.5 rounded-md border border-white/15 text-white/70 hover:text-white hover:border-white/30"
+                >
+                  Keep waiting
+                </button>
+                <button
+                  onClick={cancelBuild}
+                  disabled={cancelling}
+                  className="text-xs px-3 py-1.5 rounded-md border border-red-500/30 text-red-300 hover:text-red-200 hover:border-red-500/50 disabled:opacity-50"
+                >
+                  {cancelling ? 'Stopping…' : 'Stop build'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Pipeline */}
