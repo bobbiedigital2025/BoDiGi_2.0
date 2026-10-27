@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     const conceptId: string | undefined = body.conceptId;
 
     let idea: string;
+    let lockedConceptId: string | null = null;
 
     if (conceptId && typeof conceptId === 'string') {
       const { data: concept, error: conceptError } = await supabase
@@ -97,6 +98,34 @@ export async function POST(request: NextRequest) {
       }
 
       // Build from the APPROVED CARD SNAPSHOT, not the raw idea
+      // Atomic flip approved → building first (double-fire guard, CPO review
+      // fix Oct 26): a concurrent second call finds 'building' and hands
+      // back the running project instead of burning a second build. This
+      // door also LINKS the project, which it previously never did.
+      const { data: locked, error: lockError } = await supabase
+        .from('concepts')
+        .update({ status: 'building', updated_at: new Date().toISOString() })
+        .eq('id', conceptId)
+        .eq('status', 'approved')
+        .select('id')
+        .maybeSingle();
+
+      if (lockError) {
+        return NextResponse.json({ error: 'Something went wrong starting the build — try again.' }, { status: 500 });
+      }
+      if (!locked) {
+        const { data: current } = await supabase
+          .from('concepts')
+          .select('status, project_id')
+          .eq('id', conceptId)
+          .maybeSingle();
+        if (current?.status === 'building' && current.project_id) {
+          return NextResponse.json({ projectId: current.project_id, message: 'Build already running' });
+        }
+        return NextResponse.json({ error: 'This concept is no longer approved for a build.' }, { status: 409 });
+      }
+      lockedConceptId = conceptId;
+
       idea = buildBriefFromCard(concept.card as ConceptCard, concept.source_idea);
     } else {
       // No conceptId: admin bypass only (verification builds, audit path)
@@ -129,7 +158,27 @@ export async function POST(request: NextRequest) {
     // (idea is now either an approved-card brief or an admin-bypass idea —
     //  both sanitized at their origin; card content was sanitized at draft time)
 
-    const projectId = createProject(idea, user.id);
+    let projectId: string;
+    try {
+      projectId = createProject(idea, user.id);
+    } catch (err) {
+      if (lockedConceptId) {
+        // Fire failed — unwind the lock so the founder can retry
+        await supabase
+          .from('concepts')
+          .update({ status: 'approved', updated_at: new Date().toISOString() })
+          .eq('id', lockedConceptId);
+      }
+      throw err; // falls through to the route's catch → 500
+    }
+
+    if (lockedConceptId) {
+      // Link the project to the concept (this door previously never linked)
+      await supabase
+        .from('concepts')
+        .update({ project_id: projectId, updated_at: new Date().toISOString() })
+        .eq('id', lockedConceptId);
+    }
 
     // Keep this function instance alive until the pipeline settles.
     // Fire-and-forget without waitUntil is what let Vercel freeze builds

@@ -85,11 +85,51 @@ export async function POST(
       );
     }
 
-    // ── Lock the approval, then fire from the card snapshot ──
+    // ── Lock the approval atomically, THEN fire from the card snapshot ──
+    // Flip presented → building conditionally: a concurrent second approve
+    // (double-click, retry) finds status already 'building' and hands back
+    // the running project instead of burning a second build.
+    // (CPO review fix, Oct 26 — fire-then-flip raced two builds.)
+    const { data: locked, error: lockError } = await supabase
+      .from('concepts')
+      .update({ status: 'building', updated_at: new Date().toISOString() })
+      .eq('id', conceptId)
+      .eq('status', 'presented')
+      .select('id')
+      .maybeSingle();
+
+    if (lockError) {
+      console.error('[concept] approve lock failed:', lockError.message);
+      return NextResponse.json({ error: 'Something went wrong starting the build — try again.' }, { status: 500 });
+    }
+    if (!locked) {
+      // Another request already took the flip — hand back the running build
+      const { data: current } = await supabase
+        .from('concepts')
+        .select('status, project_id')
+        .eq('id', conceptId)
+        .maybeSingle();
+      if (current?.status === 'building' && current.project_id) {
+        return NextResponse.json({ projectId: current.project_id, message: 'Build already running' });
+      }
+      return NextResponse.json({ error: 'This concept is no longer awaiting approval.' }, { status: 409 });
+    }
+
     const approvedCard = concept.card as ConceptCard;
     const buildIdea = buildBriefFromCard(approvedCard, concept.source_idea);
 
-    const projectId = createProject(buildIdea, user.id);
+    let projectId: string;
+    try {
+      projectId = createProject(buildIdea, user.id);
+    } catch (err) {
+      // Fire failed — unwind the lock so the founder can retry
+      await supabase
+        .from('concepts')
+        .update({ status: 'presented', updated_at: new Date().toISOString() })
+        .eq('id', conceptId);
+      console.error('[concept] approve fire failed:', err);
+      return NextResponse.json({ error: 'Something went wrong starting the build — try again.' }, { status: 500 });
+    }
 
     // Keep the function alive until the pipeline settles (same pattern as
     // the old generate route — without waitUntil, Vercel freezes mid-build)
@@ -97,7 +137,6 @@ export async function POST(
     if (run) waitUntil(run);
 
     const { error: updateError } = await supabase.from('concepts').update({
-      status: 'building',
       project_id: projectId,
       updated_at: new Date().toISOString(),
     }).eq('id', conceptId);
