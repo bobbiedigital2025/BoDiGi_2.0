@@ -16,6 +16,7 @@ import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase, saveProject } from '@/lib/supabase/project-store';
 import { createAdminClient } from '@/lib/supabase/server';
 import { ensureExportScaffold } from '@/lib/agents/export-scaffold';
+import { scanSecrets, preflightLogLines, type PreflightReport } from '@/lib/deploy/preflight';
 import { computeSandboxEnv } from '@/lib/sandbox-keys';
 import type { GeneratedFile } from '@/lib/agents/types';
 
@@ -166,6 +167,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
   } catch (err) {
     console.error('Deploy preflight failed (continuing with raw files):', err);
+  }
+
+  // 2c. #14 v1.1 — secret-scan narration on the deploy path (Oct 26). The
+  // scan already ran inside ensureExportScaffold, but only to the server
+  // log — the customer never saw it. Log-only posture (v1): findings
+  // narrate, they don't block. Real keys belong in env vars — say it where
+  // they can see it.
+  try {
+    const scanReport: PreflightReport = { addedDeps: [], bridgedFiles: [], warnings: [], secretFindings: [] };
+    scanSecrets(files, scanReport);
+    if (scanReport.secretFindings.length > 0) {
+      const admin = createAdminClient();
+      for (const message of preflightLogLines(scanReport)) {
+        await admin.from('project_logs').insert({ project_id: projectId, agent: 'devops', level: 'warn', timestamp: Date.now(), message });
+      }
+    }
+  } catch (err) {
+    console.error('Deploy secret-scan narration failed (non-blocking):', err);
   }
 
   // 3. Get the user's Vercel token

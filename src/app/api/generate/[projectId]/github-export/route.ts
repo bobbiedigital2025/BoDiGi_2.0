@@ -14,6 +14,8 @@ import { getProject } from '@/lib/agents/pipeline';
 import { loadProjectFromSupabase } from '@/lib/supabase/project-store';
 import type { GeneratedFile } from '@/lib/agents/types';
 import { ensureExportScaffold } from '@/lib/agents/export-scaffold';
+import { scanSecrets, preflightLogLines, type PreflightReport } from '@/lib/deploy/preflight';
+import { createAdminClient } from '@/lib/supabase/server';
 
 const GH_API = 'https://api.github.com';
 
@@ -128,6 +130,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Export is the last line of defense for pre-scaffold-guarantee builds:
   // no project leaves BoDiGi without package.json/tsconfig/.gitignore.
   files = ensureExportScaffold(projectName, files, `${projectName}|${specSummary}`);
+
+  // #14 v1.1 — secret-scan narration on the export path (same gap as the
+  // deploy path, Oct 26): the scan ran inside ensureExportScaffold but only
+  // to the server log. Log-only posture (v1) — findings narrate, they don't
+  // block the export.
+  try {
+    const scanReport: PreflightReport = { addedDeps: [], bridgedFiles: [], warnings: [], secretFindings: [] };
+    scanSecrets(files, scanReport);
+    if (scanReport.secretFindings.length > 0) {
+      const admin = createAdminClient();
+      for (const message of preflightLogLines(scanReport)) {
+        await admin.from('project_logs').insert({ project_id: projectId, agent: 'devops', level: 'warn', timestamp: Date.now(), message });
+      }
+    }
+  } catch (err) {
+    console.error('Export secret-scan narration failed (non-blocking):', err);
+  }
 
   // 3. Get the user's stored GitHub token
   const { data: keyRow } = await supabase
