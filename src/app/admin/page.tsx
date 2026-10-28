@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Users, FolderKanban, Activity, Shield, ArrowRight, LogOut, LifeBuoy, ChevronDown } from 'lucide-react';
+import { Sparkles, Users, FolderKanban, Activity, Shield, ArrowRight, LogOut, LifeBuoy, ChevronDown, Lightbulb } from 'lucide-react';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import SecurityAuditPanel from '@/components/security-audit-panel';
@@ -41,6 +41,24 @@ interface SupportTicket {
   created_at: string;
 }
 
+interface LoopLead {
+  id: string;
+  email: string;
+  name: string | null;
+  idea_text: string;
+  verdict: {
+    market?: { verdict: string; score: number };
+    money?: { verdict: string; score: number };
+    execution?: { verdict: string; score: number };
+    pivot?: string;
+    first_move?: string;
+  } | null;
+  converted: boolean;
+  referred_by: string | null;
+  ref_code: string | null;
+  created_at: string;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
@@ -49,6 +67,7 @@ export default function AdminPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [loopLeads, setLoopLeads] = useState<LoopLead[]>([]);
   const [openTicket, setOpenTicket] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [sendingReply, setSendingReply] = useState<string | null>(null);
@@ -92,6 +111,14 @@ export default function AdminPage() {
       .order('created_at', { ascending: false });
 
     setProfiles(profilesData || []);
+
+    // Load engagement-loop leads (Honest Verdict front door — migration 019)
+    const { data: leadsData } = await supabase
+      .from('loop_leads')
+      .select('id, email, name, idea_text, verdict, converted, referred_by, ref_code, created_at')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    setLoopLeads((leadsData as LoopLead[]) || []);
 
     // Load all projects using the admin client via API
     const res = await fetch('/api/admin/projects');
@@ -437,6 +464,50 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Honest Verdict Leads (engagement loop) */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lightbulb className="w-4 h-4" /> Honest Verdict Leads ({loopLeads.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loopLeads.length === 0 ? (
+              <p className="text-white/40 text-sm">
+                No leads yet — the loop front door lives at{' '}
+                <a href="/loop.html" className="text-fuchsia-400 hover:underline">bodigi2.com/loop.html</a>.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {loopLeads.map((l) => {
+                  const scores = [l.verdict?.market?.score, l.verdict?.money?.score, l.verdict?.execution?.score]
+                    .filter((s): s is number => typeof s === 'number');
+                  const avg = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null;
+                  return (
+                    <div key={l.id} className="py-2 px-3 rounded-lg hover:bg-white/5 transition" title={l.idea_text}>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium truncate">
+                          {l.idea_text.slice(0, 90)}{l.idea_text.length > 90 ? '…' : ''}
+                        </p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {avg !== null && <Badge variant="info">{avg}/10</Badge>}
+                          {l.converted && <Badge variant="success">converted</Badge>}
+                          {l.referred_by && <Badge variant="warning">invited</Badge>}
+                        </div>
+                      </div>
+                      <p className="text-xs text-white/40 mt-0.5">
+                        {l.email} · {new Date(l.created_at).toLocaleDateString()}
+                        {l.referred_by ? ` · invited by ${l.referred_by}` : ''}
+                        {l.verdict ? '' : ' · verdict pending'}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

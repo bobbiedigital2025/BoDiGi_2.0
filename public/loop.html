@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Honest Verdict — free AI verdict on your business idea | BoDiGi 2.0</title>
+<meta name="description" content="Type your business idea. Three AI agents — Market, Money, Execution — give you the truth, the pivot, and your first move. Free, no signup.">
+<meta property="og:title" content="The Honest Verdict — BoDiGi 2.0">
+<meta property="og:description" content="Your friends won't tell you the truth about your idea. Three AI agents will. Free.">
+<meta property="og:image" content="/logo.png">
+<meta property="og:url" content="https://bodigi2.com/loop.html">
+<meta name="twitter:card" content="summary">
+<style>
+  :root {
+    --bg: #070b14; --panel: #0d1526; --panel2: #111a2e; --border: rgba(240,185,60,.16);
+    --gold: #f0b429; --gold-deep: #d97706; --text: #e8eaf0; --muted: #8b93a7; --dim: #525a6e;
+    --good: #34d399; --bad: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 20px 80px; }
+  header { text-align: center; padding: 40px 0 8px; }
+  header img { height: 44px; margin-bottom: 10px; }
+  header .brand { font-size: 20px; font-weight: 800; letter-spacing: .5px; }
+  header .tag { color: var(--gold); font-size: 13px; margin-top: 2px; }
+  .skip { text-align: center; margin: 14px 0 0; }
+  .skip a { color: var(--muted); font-size: 13px; text-decoration: none; border-bottom: 1px dotted var(--dim); }
+  .skip a:hover { color: var(--gold); }
+  .hero { text-align: center; padding: 44px 0 28px; }
+  .hero h1 { font-size: 30px; line-height: 1.25; font-weight: 800; }
+  .hero h1 .gold { color: var(--gold); }
+  .hero p { color: var(--muted); margin-top: 12px; font-size: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-top: 20px; }
+  label { display: block; font-size: 13px; font-weight: 700; color: var(--gold); margin: 16px 0 6px; letter-spacing: .3px; }
+  label:first-child { margin-top: 0; }
+  input, textarea { width: 100%; background: var(--panel2); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; color: var(--text); font-size: 15px; padding: 12px 14px; font-family: inherit; }
+  input:focus, textarea:focus { outline: none; border-color: var(--gold); }
+  textarea { min-height: 120px; resize: vertical; }
+  .hp { position: absolute; left: -9999px; top: -9999px; }
+  .btn { display: inline-block; width: 100%; background: linear-gradient(135deg, var(--gold), var(--gold-deep)); color: #0a0e1a; font-weight: 800; font-size: 16px; padding: 15px 24px; border: none; border-radius: 12px; cursor: pointer; margin-top: 20px; text-align: center; text-decoration: none; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .55; cursor: wait; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); font-weight: 600; }
+  .fine { color: var(--dim); font-size: 12px; margin-top: 12px; text-align: center; }
+  .status { text-align: center; padding: 40px 20px; }
+  .status .agents { color: var(--gold); font-weight: 700; font-size: 16px; min-height: 26px; }
+  .status .sub { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; margin: 0 auto 18px; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .err { background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.3); border-radius: 10px; padding: 12px 16px; color: #fca5a5; font-size: 14px; margin-top: 14px; }
+  .v-card { background: var(--panel2); border-left: 3px solid var(--gold); border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
+  .v-card .who { color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 1px; display: flex; justify-content: space-between; }
+  .v-card .who .score { background: rgba(240,185,60,.12); padding: 1px 8px; border-radius: 6px; }
+  .v-card .txt { font-size: 14.5px; margin-top: 6px; color: var(--text); }
+  .pivot-box { background: rgba(240,185,60,.06); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-top: 20px; }
+  .pivot-box .lbl { color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 1px; }
+  .pivot-box .txt { margin-top: 6px; font-size: 15px; }
+  .pivot-box + .pivot-box { margin-top: 12px; }
+  section { margin-top: 56px; }
+  h2 { font-size: 22px; font-weight: 800; text-align: center; }
+  h2 .gold { color: var(--gold); }
+  .sub { text-align: center; color: var(--muted); font-size: 14px; margin-top: 8px; margin-bottom: 20px; }
+  .reward { display: flex; gap: 14px; align-items: flex-start; padding: 16px; background: var(--panel2); border-radius: 12px; margin-top: 10px; }
+  .reward .ico { font-size: 22px; }
+  .reward b { font-size: 15px; }
+  .reward p { color: var(--muted); font-size: 13.5px; margin-top: 3px; }
+  .reward .gate { color: var(--gold); font-size: 12px; font-weight: 700; margin-top: 5px; }
+  .share-block { background: var(--panel2); border-radius: 12px; padding: 16px; margin-top: 12px; }
+  .share-block .lbl { font-size: 12px; font-weight: 800; color: var(--gold); letter-spacing: .8px; }
+  .share-block .txt { font-size: 13.5px; color: var(--muted); margin: 8px 0 10px; white-space: pre-wrap; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .mini { background: rgba(240,185,60,.1); border: 1px solid var(--border); color: var(--text); font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; text-decoration: none; display: inline-block; }
+  .mini:hover { background: rgba(240,185,60,.2); }
+  .copied { color: var(--good); font-size: 12px; margin-left: 8px; }
+  .invite3 { text-align: center; background: linear-gradient(rgba(240,185,60,.07), rgba(240,185,60,.03)); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-top: 20px; }
+  .invite3 .big { font-size: 17px; font-weight: 800; }
+  .invite3 p { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .lesson p { color: var(--text); font-size: 15px; margin-top: 12px; }
+  .lesson .formula { background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 18px; text-align: center; margin: 18px 0; font-size: 17px; font-weight: 700; color: var(--gold); line-height: 1.5; }
+  .lesson .ex { background: var(--panel2); border-radius: 12px; padding: 16px; font-size: 14px; color: var(--muted); border-left: 3px solid var(--gold); margin: 14px 0; }
+  .q { background: var(--panel2); border-radius: 12px; padding: 16px; margin-top: 14px; }
+  .q .qt { font-weight: 700; font-size: 14.5px; }
+  .q label { display: block; background: transparent; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 10px 12px; margin: 8px 0 0; color: var(--text); font-size: 14px; font-weight: 400; cursor: pointer; }
+  .q label:hover { border-color: var(--gold); }
+  .quiz-result { text-align: center; margin-top: 18px; font-size: 15px; font-weight: 700; }
+  .pass { color: var(--good); } .fail { color: var(--bad); }
+  footer { text-align: center; color: var(--dim); font-size: 12.5px; margin-top: 70px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,.06); }
+  footer a { color: var(--muted); text-decoration: none; } footer a:hover { color: var(--gold); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/logo.png" alt="BoDiGi 2.0">
+    <div class="brand">BoDiGi 2.0</div>
+    <div class="tag">You bring the idea. AI builds the business.</div>
+  </header>
+
+  <p class="skip"><a href="#lesson">Already building with us? Skip to Lesson 1 ↓</a></p>
+
+  <div class="hero">
+    <h1>Your friends won't tell you the truth about your idea.<br><span class="gold">We will. Free.</span></h1>
+    <p>Type your business idea. Three of our AI agents — <b>Market</b>, <b>Money</b>, and <b>Execution</b> — give it to you straight: does it have legs, the pivot that makes it stronger, and your first move this week.</p>
+  </div>
+
+  <!-- THE FORM -->
+  <div class="card" id="formCard">
+    <form id="verdictForm">
+      <label for="idea">YOUR BUSINESS IDEA</label>
+      <textarea id="idea" maxlength="2000" placeholder="e.g. A booking app for busy salon owners — clients book, reschedule, and pay a deposit, with automatic reminder texts…" required></textarea>
+      <label for="name">FIRST NAME (OPTIONAL)</label>
+      <input id="name" type="text" maxlength="60" autocomplete="given-name">
+      <label for="email">EMAIL — your verdict lands here too</label>
+      <input id="email" type="email" placeholder="you@example.com" autocomplete="email" required>
+      <input class="hp" type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+      <button class="btn" type="submit" id="submitBtn">Get my honest verdict — free</button>
+      <p class="fine">No account. No credit card. No course to buy.<br>Your idea stays yours.</p>
+    </form>
+    <div class="err hidden" id="formErr"></div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="card status hidden" id="loading">
+    <div class="spinner"></div>
+    <div class="agents" id="agentMsg">Market is checking who else is doing this…</div>
+    <div class="sub">Three agents. One honest answer. ~30 seconds.</div>
+  </div>
+
+  <!-- VERDICT -->
+  <div class="hidden" id="verdict">
+    <div class="card">
+      <h2 style="font-size:19px;">The <span class="gold">honest verdict</span></h2>
+      <div id="verdictCards"></div>
+      <div class="pivot-box"><div class="lbl">THE PIVOT</div><div class="txt" id="pivotTxt"></div></div>
+      <div class="pivot-box"><div class="lbl">YOUR FIRST MOVE THIS WEEK</div><div class="txt" id="moveTxt"></div></div>
+      <a class="btn" id="buildCta" href="https://bodigi2.com/signup">Want it built? 11 AI agents will build it — free</a>
+      <button class="btn btn-ghost" id="refineBtn" type="button">Refine my idea and get a second verdict</button>
+      <p class="fine" id="cachedNote"></p>
+    </div>
+  </div>
+
+  <!-- REWARDS -->
+  <section id="rewards" class="hidden">
+    <h2>Your <span class="gold">reward vault</span></h2>
+    <p class="sub">Everything below is real and waiting. They unlock the moment you create your free account.</p>
+    <div class="card">
+      <div class="reward"><div class="ico">⚡</div><div><b>3-day Pro trial — automatic</b><p>Unlimited builds, code downloads, no watermarks. Starts the second you sign up.</p><div class="gate">Unlocks: free account</div></div></div>
+      <div class="reward"><div class="ico">💸</div><div><b>$10 off any paid plan</b><p>Code <b style="color:var(--gold)">FLASH10</b> at checkout.</p><div class="gate">Unlocks: free account</div></div></div>
+      <div class="reward"><div class="ico">📚</div><div><b>The full docs suite with every build</b><p>README, Investor One-Pager, Reality Check, and the Marketing Kit — your business in writing.</p><div class="gate">Unlocks: your first build</div></div></div>
+    </div>
+  </section>
+
+  <!-- SHARE -->
+  <section id="share" class="hidden">
+    <h2>Know someone with a <span class="gold">notes-app idea?</span></h2>
+    <p class="sub">They'll never forgive you for being right. Send them their own honest verdict.</p>
+    <div class="card">
+      <div class="share-block">
+        <div class="lbl">FACEBOOK</div>
+        <div class="txt" id="fbCopy">Just got an honest AI verdict on my business idea — the truth, the pivot, and my first move. Free, takes two minutes:</div>
+        <div class="row"><button class="mini" data-copy="fb">Copy post</button><a class="mini" id="fbShare" href="#" target="_blank" rel="noopener">Share to Facebook</a></div>
+      </div>
+      <div class="share-block">
+        <div class="lbl">X / TWITTER</div>
+        <div class="txt" id="xCopy">My business idea just got an honest verdict from three AI agents. Free, two minutes:</div>
+        <div class="row"><button class="mini" data-copy="x">Copy post</button><a class="mini" id="xShare" href="#" target="_blank" rel="noopener">Post on X</a></div>
+      </div>
+      <div class="share-block">
+        <div class="lbl">PRIVATE DM (the personal one — this works best)</div>
+        <div class="txt" id="dmCopy">Hey! Remember that idea you're always talking about? This gives you an honest AI verdict on it — the truth, the pivot, the first move. Free, two minutes:</div>
+        <div class="row"><button class="mini" data-copy="dm">Copy message</button></div>
+      </div>
+      <div class="invite3">
+        <div class="big">Bring 3 friends 🎟️</div>
+        <p>When all 3 get their verdicts through your link, your next build gets <b style="color:var(--gold)">featured on our public showcase</b> — your app, on our front page.</p>
+        <p style="margin-top:10px;"><b style="color:var(--gold);">Your invite link:</b><br><span id="refLink" style="color:var(--text); word-break:break-all;">(appears after your verdict)</span></p>
+        <div class="row" style="justify-content:center; margin-top:10px;"><button class="mini" data-copy="link">Copy my link</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LESSON 1 -->
+  <section id="lesson" class="lesson">
+    <h2>Lesson 1: <span class="gold">How to talk to AI so it builds what you actually want</span></h2>
+    <div class="card">
+      <p>Ever asked an AI to "build me an app" and gotten something generic? That's not the AI being lazy. That's it guessing.</p>
+      <p>A vague prompt gives the AI a thousand directions and no destination. So it picks the average of all of them — a login page, a dashboard, dummy data. An app that could be anyone's.</p>
+      <div class="formula">FOR [your person]<br>THAT [the job it does for them]<br>WITH [3–5 specific features]</div>
+      <div class="ex"><b>Weak:</b> "build me a booking app"<br><br><b>Strong:</b> "Build a booking app FOR busy salon owners THAT lets clients book, reschedule, and pay a deposit WITH automatic reminder texts, a calendar owners can see at a glance, and a cancelation list that fills open slots automatically."</div>
+      <p>Same AI. Different result. The formula isn't magic — it's you deciding, in advance, what "right" looks like. The AI stops guessing and starts building <i>your</i> app.</p>
+      <p style="color:var(--muted); font-size:13.5px;">One trap to avoid: tell the AI what to BUILD, not what you're looking at. Pasting a page of text from another app makes it build what's on the page — not what's in your head.</p>
+      <div id="quizWrap">
+        <p style="font-weight:800; color:var(--gold); margin-top:24px;">✍️ Quick check — 3 questions</p>
+        <form id="quizForm">
+          <div class="q">
+            <div class="qt">1. Which prompt gives the AI the best shot at building what you want?</div>
+            <label><input type="radio" name="q1" value="a"> "Build me an app"</label>
+            <label><input type="radio" name="q1" value="b"> "Build a booking app FOR busy salon owners THAT lets clients book, reschedule, and pay a deposit WITH automatic reminder texts"</label>
+            <label><input type="radio" name="q1" value="c"> "Make it look nice and professional"</label>
+          </div>
+          <div class="q">
+            <div class="qt">2. What does a vague prompt guarantee?</div>
+            <label><input type="radio" name="q2" value="a"> A faster build</label>
+            <label><input type="radio" name="q2" value="b"> A generic app that could be anyone's</label>
+            <label><input type="radio" name="q2" value="c"> Cheaper AI bills</label>
+          </div>
+          <div class="q">
+            <div class="qt">3. The formula is:</div>
+            <label><input type="radio" name="q3" value="a"> FOR [person] THAT [job] WITH [3–5 features]</label>
+            <label><input type="radio" name="q3" value="b"> MAKE [app] LIKE [competitor]</label>
+            <label><input type="radio" name="q3" value="c"> APP [idea] GO</label>
+          </div>
+          <button class="btn" type="submit" style="margin-top:16px;">Check my answers</button>
+        </form>
+        <div class="quiz-result" id="quizResult"></div>
+      </div>
+      <div class="quiz-result pass hidden" id="quizPassed">🏅 Lesson 1 complete — you now write better prompts than most people who pay for AI tools. Your free build is waiting: <a href="https://bodigi2.com/signup" style="color:var(--gold);">bodigi2.com/signup</a></div>
+    </div>
+  </section>
+
+  <footer>
+    <p>This page is part of BoDiGi 2.0's engagement loop — the same 11 AI agents that will build your app keep this loop running.</p>
+    <p style="margin-top:8px;"><a href="https://bodigi2.com">bodigi2.com</a> · <a href="https://bodigi2.com/pricing">Pricing</a> · <a href="https://bodigi2.com/terms">Terms</a> · <a href="https://bodigi2.com/privacy">Privacy</a></p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var myRef = null; // this visitor's own invite code (after verdict)
+
+  // Capture incoming ref (?ref=XXXX) — someone invited them
+  var incomingRef = null;
+  try {
+    var p = new URLSearchParams(window.location.search).get('ref');
+    if (p && /^[A-Z0-9]{4,10}$/i.test(p)) incomingRef = p.toUpperCase();
+  } catch (e) {}
+
+  var AGENT_LINES = [
+    'Market is checking who else is doing this…',
+    'Money is running the numbers…',
+    'Execution is finding your first move…',
+    'The agents are comparing notes…'
+  ];
+
+  function showErr(msg) {
+    var el = $('formErr');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  function clearErr() { $('formErr').classList.add('hidden'); }
+
+  $('verdictForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    clearErr();
+
+    var idea = $('idea').value.trim();
+    var email = $('email').value.trim();
+    var name = $('name').value.trim();
+    var website = $('website').value;
+
+    if (idea.length < 20) { showErr('Give us a little more — one full sentence about the idea. The agents need something to work with.'); return; }
+    if (idea.length > 2000) { showErr('That\'s a lot! Trim it to the core idea (under 2000 characters) — the agents do better with focus.'); return; }
+
+    $('submitBtn').disabled = true;
+    $('formCard').classList.add('hidden');
+    $('loading').classList.remove('hidden');
+    $('verdict').classList.add('hidden');
+
+    var line = 0;
+    $('agentMsg').textContent = AGENT_LINES[0];
+    var rot = setInterval(function () { line = (line + 1) % AGENT_LINES.length; $('agentMsg').textContent = AGENT_LINES[line]; }, 4000);
+
+    fetch('/api/loop/lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, email: email, idea: idea, ref: incomingRef, website: website })
+    }).then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+      .then(function (res) {
+        clearInterval(rot);
+        var d = res.data || {};
+        if (!d.ok) {
+          $('loading').classList.add('hidden');
+          $('formCard').classList.remove('hidden');
+          $('submitBtn').disabled = false;
+          if (d.error === 'rate-limited') showErr('Easy there — one verdict at a time. Your ideas are safe; try again in a little while.');
+          else if (d.error === 'warming-up') showErr('The verdict crew is warming up — give us a few minutes and try again.');
+          else if (d.error === 'invalid-idea') showErr('Give us a little more — one full sentence about the idea.');
+          else showErr('Something glitched on our end. Your idea is safe — try again in a minute.');
+          return;
+        }
+        renderVerdict(d.verdict, d.ref_code, d.cached, idea);
+      })
+      .catch(function () {
+        clearInterval(rot);
+        $('loading').classList.add('hidden');
+        $('formCard').classList.remove('hidden');
+        $('submitBtn').disabled = false;
+        showErr('Network hiccup — try again in a minute.');
+      });
+  });
+
+  function renderVerdict(v, refCode, cached, idea) {
+    $('loading').classList.add('hidden');
+
+    if (!v) {
+      // Lead stored, AI still writing — honest state
+      $('formCard').classList.remove('hidden');
+      $('submitBtn').disabled = false;
+      showErr('');
+      $('formErr').textContent = 'Your idea is saved and your verdict is being written — it\'ll land in your inbox at ' + $('email').value.trim() + ' shortly.';
+      $('formErr').style.background = 'rgba(52,211,153,.08)';
+      $('formErr').style.borderColor = 'rgba(52,211,153,.3)';
+      $('formErr').style.color = '#6ee7b7';
+      return;
+    }
+
+    var cards = '';
+    var defs = [['market', 'MARKET'], ['money', 'MONEY'], ['execution', 'EXECUTION']];
+    for (var i = 0; i < defs.length; i++) {
+      var a = v[defs[i][0]];
+      if (!a) continue;
+      cards += '<div class="v-card"><div class="who"><span>' + defs[i][1] + '</span><span class="score">' + (a.score || '—') + '/10</span></div><div class="txt">' + escapeHtml(a.verdict) + '</div></div>';
+    }
+    $('verdictCards').innerHTML = cards;
+    $('pivotTxt').textContent = v.pivot || '';
+    $('moveTxt').textContent = v.first_move || '';
+    $('cachedNote').textContent = cached ? 'Same idea, same verdict — we saved your first one. Refine it below for a fresh take.' : '';
+
+    myRef = refCode;
+    var link = 'https://bodigi2.com/loop.html' + (refCode ? '?ref=' + refCode : '');
+    $('refLink').textContent = link;
+    $('fbCopy').textContent = 'Just got an honest AI verdict on my business idea — the truth, the pivot, and my first move. Free, takes two minutes: ' + link;
+    $('xCopy').textContent = 'My business idea just got an honest verdict from three AI agents. Free, two minutes: ' + link;
+    $('dmCopy').textContent = 'Hey! Remember that idea you\'re always talking about? This gives you an honest AI verdict on it — the truth, the pivot, the first move. Free, two minutes: ' + link;
+    $('fbShare').href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(link) + '&quote=' + encodeURIComponent('Just got an honest AI verdict on my business idea — free, two minutes.');
+    $('xShare').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent('My business idea just got an honest verdict from three AI agents — free: ') + '&url=' + encodeURIComponent(link);
+
+    $('verdict').classList.remove('hidden');
+    $('rewards').classList.remove('hidden');
+    $('share').classList.remove('hidden');
+    $('verdict').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Second shot — refine the same idea
+  $('refineBtn').addEventListener('click', function () {
+    $('verdict').classList.add('hidden');
+    $('rewards').classList.add('hidden');
+    $('share').classList.add('hidden');
+    $('formCard').classList.remove('hidden');
+    $('submitBtn').disabled = false;
+    $('idea').focus();
+    $('idea').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Pre-fill with a nudge to refine
+    var cur = $('idea').value.trim();
+    if (cur.indexOf('REFINE:') !== 0) $('idea').value = 'REFINE: ' + cur;
+  });
+
+  // Copy buttons
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-copy]');
+    if (!btn) return;
+    var what = btn.getAttribute('data-copy');
+    var text;
+    if (what === 'fb') text = $('fbCopy').textContent;
+    else if (what === 'x') text = $('xCopy').textContent;
+    else if (what === 'dm') text = $('dmCopy').textContent;
+    else if (what === 'link') text = myRef ? 'https://bodigi2.com/loop.html?ref=' + myRef : 'https://bodigi2.com/loop.html';
+    if (!text) return;
+    var done = function () {
+      var old = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      setTimeout(function () { btn.textContent = old; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, done);
+    else {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta); done();
+    }
+  });
+
+  // Quiz
+  var ANSWERS = { q1: 'b', q2: 'b', q3: 'a' };
+  $('quizForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var score = 0, answered = 0;
+    for (var q in ANSWERS) {
+      var sel = document.querySelector('input[name="' + q + '"]:checked');
+      if (sel) { answered++; if (sel.value === ANSWERS[q]) score++; }
+    }
+    var res = $('quizResult');
+    if (answered < 3) { res.textContent = 'Answer all 3 first — they\'re quick.'; res.className = 'quiz-result fail'; return; }
+    if (score === 3) {
+      res.textContent = '';
+      res.className = 'quiz-result';
+      $('quizWrap').classList.add('hidden');
+      $('quizPassed').classList.remove('hidden');
+      try { localStorage.setItem('bodigi_lesson1', 'done'); } catch (err) {}
+    } else {
+      res.textContent = score + '/3 — close! Re-read the formula and try again. (Hint: the strong prompt names a person, a job, and real features.)';
+      res.className = 'quiz-result fail';
+    }
+  });
+  try {
+    if (localStorage.getItem('bodigi_lesson1') === 'done') {
+      $('quizWrap').classList.add('hidden');
+      $('quizPassed').classList.remove('hidden');
+    }
+  } catch (e) {}
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+})();
+</script>
+</body>
+</html>
