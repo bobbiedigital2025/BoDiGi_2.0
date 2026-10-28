@@ -24,7 +24,7 @@ import type { GeneratedFile, AgentRole } from '../src/lib/agents/types';
 
 let pass = 0;
 let fail = 0;
-function assert(cond: boolean, label: string): void {
+function assert(cond: boolean | undefined, label: string): void {
   if (cond) { pass++; console.log(`  ok  ${label}`); }
   else { fail++; console.error(`  FAIL ${label}`); }
 }
