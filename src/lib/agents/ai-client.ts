@@ -110,7 +110,7 @@ export class TruncatedError extends Error {
  * Returns the raw text content of the response.
  * Throws on API errors — callers should catch and fall back.
  */
-export async function callAI(systemPrompt: string, userPrompt: string, role?: string): Promise<string> {
+export async function callAI(systemPrompt: string, userPrompt: string, role?: string, opts?: { rawContinuation?: boolean }): Promise<string> {
   const provider = getProvider();
   if (!provider) {
     throw new Error('No AI provider configured (set OPENROUTER_API_KEY or TELNYX_API_KEY)');
@@ -139,11 +139,18 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
   }
 
   // Thinking models burn the output budget on reasoning before writing a
-  // single content token. On big codegen manifests that starved the JSON —
-  // it arrived truncated (Regulars CRM, Oct 27: cut at 22,629 chars) or
-  // empty (EBooker, Oct 17) and the pipeline silently shipped starter
-  // templates. Cap the reasoning so the manifest gets the budget. Only the
-  // default CODEGEN_MODEL path — an AI_MODEL_* override opts out.
+  // single content token — the Oct 15 "builds not good" root cause.
+  // Probed Oct 28 (Juno): OpenRouter's reasoning.max_tokens is ACCEPTED
+  // but INERT for anthropic/claude-sonnet-5.5 on every provider — 500 and
+  // 2000 caps, Anthropic-native thinking passthrough, first-party pin:
+  // all burned the full budget on reasoning with zero content. What DOES
+  // bound the burn is response_format json_object — the model interleaves
+  // thinking with output instead of thinking until the budget dies (probe:
+  // 1926 reasoning tokens + 1944 chars of real content). Codegen manifests
+  // are JSON by contract, so this is free. The reasoning cap stays as
+  // belt-and-suspenders in case OpenRouter ever maps it. rawContinuation
+  // (salvage resume) opts OUT: a mid-token continuation must not be forced
+  // into a standalone valid JSON object.
   const body: Record<string, unknown> = {
     model,
     messages: [
@@ -153,6 +160,9 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
     temperature: 0.7,
     max_tokens: budget.maxTokens,
   };
+  if (provider.label === 'OpenRouter' && role && CODEGEN_ROLES.has(role) && !opts?.rawContinuation) {
+    body.response_format = { type: 'json_object' };
+  }
   if (provider.label === 'OpenRouter' && model === CODEGEN_MODEL) {
     body.reasoning = { max_tokens: 8_000 };
   }
@@ -174,6 +184,27 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
   const content: string | undefined = choice?.message?.content;
   const finishReason: string | undefined = choice?.finish_reason;
 
+  // ─── Usage accounting — BEFORE the truncation checks so full-budget
+  // burns (the most expensive calls) still reach the ledger (RUNE's Oct 28
+  // Finding 3a). Awaited: the relay chain-handoff exits the function
+  // context, which kills fire-and-forget fetches — that is why zero rows
+  // landed after 04:18 UTC (Finding 3b). Still wrapped so accounting can
+  // never break generation.
+  try {
+    const usage = data.usage || {};
+    const inputTokens = usage.prompt_tokens || 0;
+    const outputTokens = usage.completion_tokens || 0;
+    const price = MODEL_PRICE[model] ?? MODEL_PRICE['openai/gpt-4o-mini'];
+    const estCostCents = (inputTokens * price.input + outputTokens * price.output);
+    await logAiUsage({
+      kind: currentCallKind || 'other',
+      model,
+      inputTokens,
+      outputTokens,
+      estCostCents,
+    });
+  } catch { /* accounting must never break generation */ }
+
   // finish_reason=length = the output ceiling cut the response mid-stream.
   // Throw a typed error so codegen runners can attempt a continuation from
   // the cut point instead of parsing a half-written manifest and silently
@@ -191,22 +222,6 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
   if (!content) {
     throw new Error('AI returned an empty response');
   }
-
-  // ─── Usage accounting (fire-and-forget — never blocks the response) ───
-  try {
-    const usage = data.usage || {};
-    const inputTokens = usage.prompt_tokens || 0;
-    const outputTokens = usage.completion_tokens || 0;
-    const price = MODEL_PRICE[model] ?? MODEL_PRICE['openai/gpt-4o-mini'];
-    const estCostCents = (inputTokens * price.input + outputTokens * price.output);
-    logAiUsage({
-      kind: currentCallKind || 'other',
-      model,
-      inputTokens,
-      outputTokens,
-      estCostCents,
-    });
-  } catch { /* accounting must never break generation */ }
 
   return content;
 }
@@ -279,7 +294,7 @@ export async function callImageAI(prompt: string): Promise<string> {
     const outputTokens = usage.completion_tokens || 0;
     // Gemini 2.5 Flash Image: $30/M output tokens (~1290 tokens/image ≈ 3.9¢)
     const estCostCents = (inputTokens * 0.00000015 + outputTokens * 0.00003);
-    logAiUsage({
+    await logAiUsage({
       kind: currentCallKind || 'image',
       model: IMAGE_MODEL,
       inputTokens,
@@ -291,19 +306,22 @@ export async function callImageAI(prompt: string): Promise<string> {
   return dataUrl.split(',', 2)[1];
 }
 
-function logAiUsage(entry: {
+async function logAiUsage(entry: {
   kind: string;
   model: string;
   inputTokens: number;
   outputTokens: number;
   estCostCents: number;
-}) {
+}): Promise<void> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return;
 
-  // Fire-and-forget: don't await, don't throw — accounting is best-effort
-  fetch(`${url}/rest/v1/ai_usage_log`, {
+  // Awaited by callers — the relay chain-handoff exits the function
+  // context, which kills unawaited fetches (Oct 28: zero usage rows after
+  // 04:18 UTC). Swallows its own errors: best-effort accounting must
+  // never break generation.
+  return fetch(`${url}/rest/v1/ai_usage_log`, {
     method: 'POST',
     headers: {
       'apikey': key,
@@ -320,5 +338,5 @@ function logAiUsage(entry: {
       output_tokens: entry.outputTokens,
       est_cost_cents: entry.estCostCents,
     }]),
-  }).catch(() => { /* silent — accounting never breaks generation */ });
+  }).then(() => undefined).catch(() => { /* silent — accounting never breaks generation */ });
 }

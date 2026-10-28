@@ -744,7 +744,8 @@ ${partial}
 PARTIAL;
 
 Continue the JSON EXACTLY where the partial stops — if it stopped mid-string or mid-token, start with the very next characters. Output ONLY the continuation: no repetition of earlier content, no code fences, no commentary.`,
-    role
+    role,
+    { rawContinuation: true }
   );
   return extractFiles(partial + continuation, role);
 }

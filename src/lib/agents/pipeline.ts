@@ -87,9 +87,14 @@ const PIPELINE_HARD_STOP_MS = 285_000;
 const ROLE_TIME_ESTIMATE_MS: Partial<Record<AgentRole, number>> = {
   pm: 90_000,
   architect: 90_000,
-  frontend: 120_000,
-  backend: 180_000, // the long pole — AI-generating the API layer
-  database: 60_000,
+  // Codegen estimates MUST stay >= budgetForRole(role).timeoutMs (270s
+  // since 0ea46d4). The Oct 28 verification builds died because backend
+  // still estimated 180s: the chain check let it start in a window that
+  // couldn't fit a 270s call, and the Vercel 300s ceiling killed the
+  // function mid-flight. Underestimates risk mid-task death (RUNE, Oct 28).
+  frontend: 270_000,
+  backend: 270_000,
+  database: 270_000,
   docs: 90_000,
 };
 const DEFAULT_TASK_ESTIMATE_MS = 60_000;
