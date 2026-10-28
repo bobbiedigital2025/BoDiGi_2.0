@@ -90,6 +90,22 @@ export function getAIStatus(): { connected: boolean; model: string; label: strin
 }
 
 /**
+ * The model hit its output-token ceiling mid-response (finish_reason=length).
+ * `partial` holds whatever content arrived — codegen runners use it to
+ * request a continuation from the exact cut point instead of silently
+ * falling back to starter templates.
+ */
+export class TruncatedError extends Error {
+  readonly partial: string;
+
+  constructor(partial: string, detail: string) {
+    super(detail);
+    this.name = 'TruncatedError';
+    this.partial = partial;
+  }
+}
+
+/**
  * Call the AI with a system prompt and user prompt.
  * Returns the raw text content of the response.
  * Throws on API errors — callers should catch and fall back.
@@ -122,19 +138,30 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
     headers['X-Title'] = 'BoDiGi 2.0';
   }
 
+  // Thinking models burn the output budget on reasoning before writing a
+  // single content token. On big codegen manifests that starved the JSON —
+  // it arrived truncated (Regulars CRM, Oct 27: cut at 22,629 chars) or
+  // empty (EBooker, Oct 17) and the pipeline silently shipped starter
+  // templates. Cap the reasoning so the manifest gets the budget. Only the
+  // default CODEGEN_MODEL path — an AI_MODEL_* override opts out.
+  const body: Record<string, unknown> = {
+    model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    temperature: 0.7,
+    max_tokens: budget.maxTokens,
+  };
+  if (provider.label === 'OpenRouter' && model === CODEGEN_MODEL) {
+    body.reasoning = { max_tokens: 8_000 };
+  }
+
   const response = await fetch(provider.url, {
     method: 'POST',
     headers,
     signal: controller.signal,
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: budget.maxTokens,
-    }),
+    body: JSON.stringify(body),
   }).finally(() => clearTimeout(timeout));
 
   if (!response.ok) {
@@ -143,7 +170,24 @@ export async function callAI(systemPrompt: string, userPrompt: string, role?: st
   }
 
   const data = await response.json();
-  const content: string | undefined = data.choices?.[0]?.message?.content;
+  const choice = data.choices?.[0];
+  const content: string | undefined = choice?.message?.content;
+  const finishReason: string | undefined = choice?.finish_reason;
+
+  // finish_reason=length = the output ceiling cut the response mid-stream.
+  // Throw a typed error so codegen runners can attempt a continuation from
+  // the cut point instead of parsing a half-written manifest and silently
+  // falling back to templates. With thinking models this can also arrive
+  // with EMPTY content — the whole budget went to reasoning. Both shapes
+  // are truncation.
+  if (finishReason === 'length') {
+    throw new TruncatedError(
+      typeof content === 'string' ? content : '',
+      content
+        ? `AI response hit the ${budget.maxTokens}-token output ceiling mid-manifest (finish_reason=length)`
+        : `AI spent the entire ${budget.maxTokens}-token output budget on reasoning before writing any content (finish_reason=length, empty response)`
+    );
+  }
   if (!content) {
     throw new Error('AI returned an empty response');
   }

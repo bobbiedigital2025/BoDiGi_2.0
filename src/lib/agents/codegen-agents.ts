@@ -11,7 +11,7 @@
  */
 
 import type { ProjectSpecs, ArchitectureDoc, GeneratedFile, AgentRole } from './types';
-import { hasAIKey, callAI } from './ai-client';
+import { hasAIKey, callAI, TruncatedError } from './ai-client';
 import { hasLettaKey, callLettaAgent } from './letta-client';
 import { withLearnedRules } from './build-memory';
 import { designBriefFor } from './design-briefs';
@@ -706,6 +706,49 @@ function extractFiles(response: string, agent: AgentRole): GeneratedFile[] {
   });
 }
 
+/**
+ * Truncation salvage (EBooker/Regulars autopsy, Oct 28): when the model's
+ * file manifest gets cut off by the output ceiling, one continuation call
+ * resumes it from the exact cut point instead of silently shipping starter
+ * templates. One attempt, bounded — the reasoning cap in ai-client makes
+ * truncation rare; this is the net under it.
+ */
+async function extractFilesWithContinuation(
+  systemPrompt: string,
+  userPrompt: string,
+  role: AgentRole,
+  log: LogFn
+): Promise<GeneratedFile[]> {
+  let partial: string;
+  try {
+    const raw = await callAI(systemPrompt, userPrompt, role);
+    return extractFiles(raw, role);
+  } catch (err) {
+    if (!(err instanceof TruncatedError)) throw err;
+    partial = err.partial;
+  }
+  // A cut this early means the model never reached the manifest — nothing
+  // worth continuing. Let the caller's fallback handle it.
+  if (partial.trim().length < 200) {
+    throw new Error('truncated before any usable manifest content');
+  }
+  log('warn', `AI manifest truncated at the output ceiling — salvaging with a continuation from the cut point (${partial.length} chars recovered so far)`);
+  const continuation = await callAI(
+    systemPrompt,
+    `${userPrompt}
+
+Your previous response was cut off by an output limit. Everything you produced so far:
+
+<<<PARTIAL
+${partial}
+PARTIAL;
+
+Continue the JSON EXACTLY where the partial stops — if it stopped mid-string or mid-token, start with the very next characters. Output ONLY the continuation: no repetition of earlier content, no code fences, no commentary.`,
+    role
+  );
+  return extractFiles(partial + continuation, role);
+}
+
 export function buildDatabasePrompt(input: DatabaseAgentInput): string {
   const { architecture, specs } = input;
   const models = architecture.dataModels
@@ -736,8 +779,8 @@ export async function runDatabaseAgent(
   // Secondary path: Telnyx inference
   if (hasAIKey()) {
     try {
-      const raw = await callAI(DATABASE_AGENT_SYSTEM_PROMPT, await withLearnedRules('database', buildDatabasePrompt(input)), 'database');
-      return { files: extractFiles(raw, 'database') };
+      const files = await extractFilesWithContinuation(DATABASE_AGENT_SYSTEM_PROMPT, await withLearnedRules('database', buildDatabasePrompt(input)), 'database', log);
+      return { files };
     } catch (err) {
       log('warn', `AI call failed, using default database files: ${err instanceof Error ? err.message : 'unknown'}`);
     }
@@ -782,8 +825,8 @@ export async function runBackendAgent(
   // Secondary path: Telnyx inference
   if (hasAIKey()) {
     try {
-      const raw = await callAI(BACKEND_AGENT_SYSTEM_PROMPT, await withLearnedRules('backend', buildBackendPrompt(input)), 'backend');
-      return { files: extractFiles(raw, 'backend') };
+      const files = await extractFilesWithContinuation(BACKEND_AGENT_SYSTEM_PROMPT, await withLearnedRules('backend', buildBackendPrompt(input)), 'backend', log);
+      return { files };
     } catch (err) {
       log('warn', `AI call failed, using default backend files: ${err instanceof Error ? err.message : 'unknown'}`);
     }
@@ -832,8 +875,8 @@ export async function runFrontendAgent(
   // Secondary path: Telnyx inference
   if (hasAIKey()) {
     try {
-      const raw = await callAI(FRONTEND_AGENT_SYSTEM_PROMPT, await withLearnedRules('frontend', buildFrontendPrompt(input)), 'frontend');
-      return { files: extractFiles(raw, 'frontend') };
+      const files = await extractFilesWithContinuation(FRONTEND_AGENT_SYSTEM_PROMPT, await withLearnedRules('frontend', buildFrontendPrompt(input)), 'frontend', log);
+      return { files };
     } catch (err) {
       log('warn', `AI call failed, using default frontend files: ${err instanceof Error ? err.message : 'unknown'}`);
     }

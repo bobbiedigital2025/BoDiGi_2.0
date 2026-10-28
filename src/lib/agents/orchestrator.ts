@@ -24,6 +24,7 @@ import type {
 import { AGENT_ROLES } from './types';
 import { ensureImportIntegrity } from './import-integrity';
 import { ensureStylingScaffold } from './styling-scaffold';
+import { reconcileDependencies, type PreflightReport } from '../deploy/preflight';
 
 const DEFAULT_CONFIG: OrchestratorConfig = {
   maxConcurrentAgents: 5,
@@ -486,6 +487,21 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     // stub, so the file set compiles no matter what an agent missed.
     ensureImportIntegrity(this.state.generatedFiles, (msg) => this.log('devops', 'warn', msg));
 
+    // Dependency reconciliation at BUILD time (EBooker+ autopsy, Oct 28):
+    // preflight previously ran only on the export/deploy routes, so a build
+    // that fell back to templates could persist auth routes importing zod
+    // beside a package.json that never declared it — and whichever exit
+    // path the customer later used inherited the gap. Reconcile here so the
+    // STORED file set is always dep-complete.
+    const depReport: PreflightReport = { addedDeps: [], bridgedFiles: [], warnings: [], secretFindings: [] };
+    reconcileDependencies(this.state.generatedFiles, depReport);
+    if (depReport.addedDeps.length > 0) {
+      this.log('devops', 'info', `Preflight: added ${depReport.addedDeps.length} missing package(s) to package.json (${depReport.addedDeps.join(', ')}) — the generated code imports them; deploys fail without this.`);
+    }
+    for (const warning of depReport.warnings) {
+      this.log('devops', 'warn', `Preflight: ${warning}`);
+    }
+
   }
 
   private triggerHealing(failedTask: AgentTask, error: string): void {
@@ -581,6 +597,20 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         } else {
           this.state.status = 'done';
           this.ensureScaffoldFiles();
+          // Never let a template-fallback build pass as a clean one. The
+          // Oct 15 "builds are not coming out good" wound was exactly this
+          // silence: EBooker/Regulars shipped backend+frontend starter
+          // templates with status "done" and nothing at the end of the log
+          // that said so. Say it where the customer reads it.
+          const fellBack = [...new Set(
+            this.state.logs
+              .filter((l) => l.level === 'warn' && /using default ([a-z]+)/.test(l.message))
+              .map((l) => (l.message.match(/using default ([a-z]+)/) || [])[1])
+              .filter(Boolean)
+          )];
+          if (fellBack.length > 0) {
+            this.log('docs', 'warn', `Build quality notice: ${fellBack.length} stage(s) ran on starter defaults instead of AI-generated output (${fellBack.join(', ')}). The app builds and runs, but those parts are placeholder-quality — use Modify to upgrade them or rebuild the project.`);
+          }
         }
         break;
       case 'healing': {
