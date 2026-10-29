@@ -59,7 +59,7 @@ export async function GET(
     .order('created_at', { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: 'Campaigns unavailable — has migration 020 been applied?' }, { status: 500 });
+    return NextResponse.json({ error: 'Campaigns unavailable — has migration 021 been applied?' }, { status: 500 });
   }
   return NextResponse.json({ campaigns });
 }
@@ -99,7 +99,7 @@ export async function POST(
     .single();
 
   if (insertError || !campaign) {
-    return NextResponse.json({ error: 'Could not create campaign — has migration 020 been applied?' }, { status: 500 });
+    return NextResponse.json({ error: 'Could not create campaign — has migration 021 been applied?' }, { status: 500 });
   }
 
   try {

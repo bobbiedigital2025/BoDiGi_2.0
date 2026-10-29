@@ -1,5 +1,5 @@
 -- ============================================================================
--- 020 — AD CAMPAIGNS (Ad Studio v2, kinetic tier first; render_jobs = 021 — campaigns first, render_jobs references them)
+-- 021 — AD CAMPAIGNS (Ad Studio v2 pre-purchase scripting layer; render_jobs = 020, applied)
 -- One campaign = one master script + 3 hook variants, cut to 6 videos
 -- (3 hooks × 2 formats), plus per-platform posting copy + a day-by-day
 -- posting plan. Delivered as a package — "testing" is a playbook we hand
@@ -60,3 +60,7 @@ CREATE POLICY ad_campaigns_admin_select ON ad_campaigns
       WHERE profiles.id = auth.uid() AND profiles.role = 'admin'
     )
   );
+
+-- Bridge: render_jobs (020, already applied) gains the campaign link so a
+-- purchased campaign's render job can find its scripting record.
+ALTER TABLE render_jobs ADD COLUMN IF NOT EXISTS campaign_id BIGINT REFERENCES ad_campaigns(id) ON DELETE SET NULL;
