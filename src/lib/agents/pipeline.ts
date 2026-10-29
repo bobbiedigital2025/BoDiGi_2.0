@@ -149,6 +149,13 @@ export async function executePipeline(projectId: string, idea: string, userId?: 
   const project = store.get(projectId);
   if (!project) return;
 
+  // Attribute every AI call in this window to the project. Module-level
+  // usage context resets per serverless invocation — the relay pattern means
+  // each window is a fresh invocation, so this must run at every entry or
+  // ai_usage_log rows land with NULL user/project (Oct 28: RUNE's ledger
+  // discriminator only worked after a project_id-less query).
+  setUsageContext('build', userId, projectId);
+
   const { orchestrator } = project;
   const tasks = orchestrator.getState().tasks;
   const pipelineStart = Date.now();
