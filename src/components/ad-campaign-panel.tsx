@@ -49,6 +49,9 @@ interface CampaignRow {
 }
 
 export function AdCampaignPanel({ projectId, appName }: { projectId: string; appName: string }) {
+  // Rendered by the parent only when Bobbie's pricing GO flips the tier
+  // flag — a visible coming-soon surface is a customer-facing change,
+  // which is her call.
   const [brief, setBrief] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
