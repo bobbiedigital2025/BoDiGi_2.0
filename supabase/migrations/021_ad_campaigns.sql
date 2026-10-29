@@ -22,7 +22,7 @@
 CREATE TABLE IF NOT EXISTS ad_campaigns (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  project_id BIGINT REFERENCES projects(id) ON DELETE CASCADE NOT NULL,
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE NOT NULL,
   tier TEXT NOT NULL DEFAULT 'kinetic' CHECK (tier IN ('kinetic', 'avatar')),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'scripted', 'rendering', 'cutting', 'delivered', 'failed')),
   brief TEXT NOT NULL,
