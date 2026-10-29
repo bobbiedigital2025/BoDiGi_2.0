@@ -1,5 +1,5 @@
 -- ============================================================================
--- 020 — AD CAMPAIGNS (Ad Studio v2, kinetic tier first)
+-- 020 — AD CAMPAIGNS (Ad Studio v2, kinetic tier first; render_jobs = 021 — campaigns first, render_jobs references them)
 -- One campaign = one master script + 3 hook variants, cut to 6 videos
 -- (3 hooks × 2 formats), plus per-platform posting copy + a day-by-day
 -- posting plan. Delivered as a package — "testing" is a playbook we hand
