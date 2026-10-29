@@ -19,6 +19,7 @@ import BuildFlowBar from '@/components/build-flow-bar';
 import ProjectJourneyMenu from '@/components/project-journey-menu';
 import { useProjectFlow } from '@/components/use-project-flow';
 import { AdStudioPanel } from '@/components/ad-studio-panel';
+import { AdCampaignPanel } from '@/components/ad-campaign-panel';
 import { agentName } from '@/lib/agents/types';
 
 interface AgentActivity {
@@ -648,6 +649,14 @@ export default function DashboardPage({ params }: { params: Promise<{ projectId:
                 projectId={projectId}
                 appName={state.name}
                 existingAd={state.specs?.ad ?? null}
+              />
+            )}
+
+            {/* Campaign Studio — Ad Studio v2 campaign mode (kinetic tier) */}
+            {state.status === 'done' && (
+              <AdCampaignPanel
+                projectId={projectId}
+                appName={state.name}
               />
             )}
 
