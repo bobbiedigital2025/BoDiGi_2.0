@@ -55,7 +55,7 @@ export async function GET(
   const { data: campaigns, error } = await supabase
     .from('ad_campaigns')
     .select('id, tier, status, brief, campaign, deliverables, error, created_at, updated_at')
-    .eq('project_id', Number(projectId))
+    .eq('project_id', projectId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -90,7 +90,7 @@ export async function POST(
     .from('ad_campaigns')
     .insert({
       user_id: user.id,
-      project_id: Number(projectId),
+      project_id: projectId,
       tier,
       status: 'draft',
       brief,
