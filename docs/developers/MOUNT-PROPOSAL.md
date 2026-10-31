@@ -1,0 +1,5 @@
+# Mount proposal — where the Developers section lives
+
+**Recommendation: keep the source of truth in `docs/developers/` (this folder), and render it publicly at a `/developers` route on bodigi2.com after review.**
+
+The repo already carries its product docs in `docs/`, so `docs/developers/` nests cleanly, versions with the code, and reviews like any other change — a branch today, a PR for Bobbie's approval, and no deploy risk while drafts are pending. When approved, the same markdown should mount as a `/developers` page in the app (a lightweight renderer over these files — no content fork, one source of truth), because the audience for these docs is external developers evaluating BoDiGi from the marketing site: a public `/developers` route is the credibility surface, while `docs/` alone stays invisible to customers. Two rules for either mount: the pages contain zero secrets (environment variable names only), and every claim stays pinned to shipped code — when the API changes, the docs change in the same PR.
